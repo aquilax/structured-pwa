@@ -1,0 +1,24 @@
+{
+  "name": "structured-pwa",
+  "version": "1.0.0",
+  "description": "Structured data entry PWA",
+  "main": "script.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aquilax/if-pwa.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/aquilax/structured-pwa/issues"
+  },
+  "homepage": "https://github.com/aquilax/structured-pwa#readme",
+  "devDependencies": {
+    "esbuild": "0.19.4",
+    "workbox-cli": "^7.0.0"
+  }
+}

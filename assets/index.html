@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width initial-scale=1">
+  <title>Structured data entry PWA</title>
+  <meta name="description" content="Structured data entry PWA">
+  <meta name="theme-color" content="#FCAF3E"/>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icon_192.png">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div class="wrapper">
+    <h1>Structured data entry PWA</h1>
+    <div id="container"></div>
+    <style>
+      div { border: 1px solid red}
+    </style>
+  </div>
+  <script src="script.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js');
+      });
+    }
+  </script>
+
+  <template id="template-home">
+    <h2>Home</h2>
+    <div class="home"></div>
+  </template>
+
+  <template id="template-namespace">
+    <div class="card namespace">
+      <h2 class="heading"></h2>
+      <button class="button close-card">X</button>
+      <form>
+        <fieldset></fieldset>
+        <button class="button add-record">add</button>
+      </form>
+      <table>
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </template>
+</body>
+</html>
