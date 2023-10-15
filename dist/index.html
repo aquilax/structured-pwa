@@ -17,24 +17,27 @@
     body {
       font-family: Arial, Helvetica, sans-serif;
     }
+    div { border: 1px solid red}
+    table td {border: 1px solid #cecece; width: 100%;}
+    .wrapper {
+      padding: 0 1em;
+      max-width: 600px;
+      margin: 0 auto;
+    }
   </style>
 </head>
 <body>
-  <div id="app"></div>
   <div class="wrapper">
     <h1>Structured data entry PWA</h1>
     <div id="container"></div>
-    <style>
-      div { border: 1px solid red}
-    </style>
   </div>
   <script src="script.js"></script>
   <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js');
-      });
-    }
+    // if ('serviceWorker' in navigator) {
+    //   window.addEventListener('load', () => {
+    //     navigator.serviceWorker.register('/sw.js');
+    //   });
+    // }
   </script>
 
   <template id="template-home">
@@ -45,10 +48,10 @@
   <template id="template-namespace">
     <div class="card namespace">
       <h2 class="heading"></h2>
-      <button class="button close-card">X</button>
+      <button type="button" class="button close-card">X</button>
       <form>
         <fieldset></fieldset>
-        <button class="button add-record">add</button>
+        <button type="submit" class="button add-record">add</button>
       </form>
       <table>
         <thead></thead>

@@ -1,3 +1,5 @@
+import { IStorage } from "storage/storage";
+
 type Namespace = string;
 
 const namespaceConfigNamespace: Namespace = "namespaceConfigV1";
@@ -9,19 +11,6 @@ export class API {
     this.storage = storage
   }
 
-  data: Record<Namespace, Array<any>> = {
-    [namespaceConfigNamespace]: [
-      {
-        namespace: "merkiV1",
-        config: [
-          { name: "ts", type: "datetime-local" },
-          { name: "what", type: "text" },
-          { name: "qty", type: "number" },
-          { name: "label", type: "text" },
-        ],
-      },
-    ],
-  };
   async getHomeElements() {
     return [
       { namespace: "merkiV1", name: "merki" },
@@ -41,13 +30,11 @@ export class API {
   async getNamespaceData(
     namespace: Namespace
   ): Promise<Array<Record<string, any>>> {
-    return this.data[namespace] || [];
+    const data = await this.storage.get()
+    return data.filter(m => m.meta.ns === namespace).map(m => m.data)
   }
 
   async add(namespace: Namespace, record: any) {
-    if (!this.data[namespace]) {
-      this.data[namespace] = [];
-    }
-    this.data[namespace].push(record);
+    this.storage.add(namespace, record)
   }
 }

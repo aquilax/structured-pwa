@@ -1,4 +1,5 @@
 import { API } from "api/api";
+import { Namespace } from "storage/storage";
 import { dom, getLocaleDateTime, run } from "utils";
 
 type FieldType = string;
@@ -33,7 +34,6 @@ export const renderNamespace = async ({
   const $thead = $clone.querySelector<HTMLElement>("thead");
   const $tbody = $clone.querySelector<HTMLElement>("tbody");
   const $heading = $clone.querySelector<HTMLHeadElement>(".heading");
-  const $addButton = $clone.querySelector<HTMLHeadElement>(".add-record");
   const $closeButton = $clone.querySelector<HTMLHeadElement>(".close-card");
 
   if ($heading) {
@@ -47,7 +47,7 @@ export const renderNamespace = async ({
     }
   });
 
-  $addButton?.addEventListener("click", (e) => {
+  $form?.addEventListener("submit", (e) => {
     // add record button
     e.preventDefault();
     if ($form && namespace) {
@@ -55,8 +55,7 @@ export const renderNamespace = async ({
       const data = Object.fromEntries(formData);
       console.table(data);
       api.add(namespace, data).then(() => {
-        $form.reset();
-        // TODO: repopulate table
+        // repopulate table
         Promise.all([
           api.getNamespaceConfig(namespace),
           api.getNamespaceData(namespace),
@@ -78,29 +77,26 @@ export const renderNamespace = async ({
           type: cel.type,
           name: cel.name,
           value: getDefaultValue(cel.type),
+          ...((cel.required) ? {required: 'required'}: {}),
         })
       )
     );
     // populate form
     $fieldset?.replaceChildren(...formContent);
 
-    const theadContent = config.map((cel) =>
-        dom("th", {}, cel.name)
-      )
+    const theadContent = config.map((cel) => dom("th", {}, cel.name));
     // populate thead
     $thead?.replaceChildren(...theadContent);
 
-    const tbodyContent = data
-        .reverse()
-        .map((row) => {
-          const tds = config.map((c) => {
-            return dom("td", {}, `${row[c.name]}`);
-          });
-          return dom("tr", {}, ...tds);
-        })
+    const tbodyContent = data.reverse().map((row) => {
+      const tds = config.map((c) => {
+        return dom("td", {}, `${row[c.name]}`);
+      });
+      return dom("tr", {}, ...tds);
+    });
     // populate tbody
-    $tbody?.replaceChildren(...tbodyContent)
-  }
+    $tbody?.replaceChildren(...tbodyContent);
+  };
 
   const { config } = await api.getNamespaceConfig(namespace);
   const data = await api.getNamespaceData(namespace);

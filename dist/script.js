@@ -1,13 +1,43 @@
 "use strict";
 (() => {
-  // src/storage/memory.ts
-  var MemoryStorage = class {
-    add(ns, data) {
-      throw new Error("Method not implemented.");
-    }
-    getAll(ns) {
-      throw new Error("Method not implemented.");
-    }
+  // src/storage/storage.ts
+  var EmptyMessageID = "-";
+  var newMessageID = (namespace, nodeID, counter) => `${namespace}.${nodeID}.${counter}.`;
+
+  // src/replication/replication.ts
+  var replication = (nodeID, storage, config) => {
+    let lastUpdate = 0;
+    const replicate = () => {
+      const allMessages = storage.get();
+      const messages = allMessages.filter((m) => m.meta.ts > lastUpdate);
+      let cursor = EmptyMessageID;
+      if (allMessages.length > 0) {
+        cursor = allMessages[allMessages.length - 1].id;
+      }
+      const body = { cursor, messages };
+      console.log("REPLICATION >>>", body);
+      fetch(config.url, {
+        method: "POST",
+        cache: "no-cache",
+        headers: {
+          "Content-Type": "application/json",
+          "X-NodeID": nodeID
+        },
+        body: JSON.stringify(body)
+      }).then((r) => {
+        if (r.ok) {
+          return r.json();
+        }
+        throw "error sync";
+      }).then((body2) => {
+        console.log("REPLICATION <<<", body2);
+        lastUpdate = (/* @__PURE__ */ new Date()).getTime();
+        if (body2.messages) {
+          storage.append(body2.messages);
+        }
+      }).catch(console.error);
+    };
+    setInterval(replicate, config.interval);
   };
 
   // src/utils.ts
@@ -63,7 +93,6 @@
     const $thead = $clone.querySelector("thead");
     const $tbody = $clone.querySelector("tbody");
     const $heading = $clone.querySelector(".heading");
-    const $addButton = $clone.querySelector(".add-record");
     const $closeButton = $clone.querySelector(".close-card");
     if ($heading) {
       $heading.innerText = namespace;
@@ -74,14 +103,13 @@
         card.remove();
       }
     });
-    $addButton?.addEventListener("click", (e) => {
+    $form?.addEventListener("submit", (e) => {
       e.preventDefault();
       if ($form && namespace) {
         const formData = new FormData($form);
         const data2 = Object.fromEntries(formData);
         console.table(data2);
         api.add(namespace, data2).then(() => {
-          $form.reset();
           Promise.all([
             api.getNamespaceConfig(namespace),
             api.getNamespaceData(namespace)
@@ -101,14 +129,13 @@
           dom("input", {
             type: cel.type,
             name: cel.name,
-            value: getDefaultValue(cel.type)
+            value: getDefaultValue(cel.type),
+            ...cel.required ? { required: "required" } : {}
           })
         )
       );
       $fieldset?.replaceChildren(...formContent);
-      const theadContent = config2.map(
-        (cel) => dom("th", {}, cel.name)
-      );
+      const theadContent = config2.map((cel) => dom("th", {}, cel.name));
       $thead?.replaceChildren(...theadContent);
       const tbodyContent = data2.reverse().map((row) => {
         const tds = config2.map((c) => {
@@ -183,19 +210,6 @@
   var namespaceConfigNamespace = "namespaceConfigV1";
   var API = class {
     constructor(storage) {
-      this.data = {
-        [namespaceConfigNamespace]: [
-          {
-            namespace: "merkiV1",
-            config: [
-              { name: "ts", type: "datetime-local" },
-              { name: "what", type: "text" },
-              { name: "qty", type: "number" },
-              { name: "label", type: "text" }
-            ]
-          }
-        ]
-      };
       this.storage = storage;
     }
     async getHomeElements() {
@@ -214,20 +228,74 @@
       );
     }
     async getNamespaceData(namespace) {
-      return this.data[namespace] || [];
+      const data = await this.storage.get();
+      return data.filter((m) => m.meta.ns === namespace).map((m) => m.data);
     }
     async add(namespace, record) {
-      if (!this.data[namespace]) {
-        this.data[namespace] = [];
-      }
-      this.data[namespace].push(record);
+      this.storage.add(namespace, record);
+    }
+  };
+
+  // src/storage/localStorage.ts
+  var LocalStorage = class {
+    constructor(nodeID) {
+      this.storageKey = "STORAGE";
+      this.nodeID = nodeID;
+    }
+    getState(storageKey) {
+      return JSON.parse(localStorage.getItem(storageKey) || "{}");
+    }
+    setState(storageKey, state) {
+      return localStorage.setItem(storageKey, JSON.stringify(state));
+    }
+    add(namespace, data) {
+      const state = this.getState(this.storageKey);
+      const messageID = newMessageID(namespace, this.nodeID, (state.messages || []).length);
+      const message = {
+        id: messageID,
+        meta: {
+          ns: namespace,
+          op: "ADD",
+          messageID: EmptyMessageID,
+          ts: (/* @__PURE__ */ new Date()).getTime()
+        },
+        data
+      };
+      this.setState(this.storageKey, {
+        ...state,
+        counter: (state.messages || []).length,
+        messages: [...state.messages || [], message]
+      });
+      return messageID;
+    }
+    append(messages) {
+      const state = this.getState(this.storageKey);
+      this.setState(this.storageKey, {
+        ...state,
+        counter: (state.messages || []).length,
+        messages: [...state.messages || [], ...messages]
+      });
+    }
+    get() {
+      return this.getState(this.storageKey).messages || [];
     }
   };
 
   // src/index.ts
   window.addEventListener("load", () => {
-    const storage = new MemoryStorage();
+    const nodeID = run(() => {
+      const nodeID2 = localStorage.getItem("NODE_ID");
+      if (nodeID2) {
+        return nodeID2;
+      }
+      const newNodeID = `nd${Math.ceil((/* @__PURE__ */ new Date()).getTime()).toString(36).toUpperCase()}`;
+      localStorage.setItem("NODE_ID", newNodeID);
+      return newNodeID;
+    });
+    console.log({ nodeID });
+    const storage = new LocalStorage(nodeID);
     const api = new API(storage);
     app(window, api);
+    replication(nodeID, storage, { interval: 1e3 * 60, url: "http://localhost:3333/sync" });
   });
 })();
