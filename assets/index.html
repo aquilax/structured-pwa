@@ -25,10 +25,14 @@
       /* div { border: 1px solid red} */
       table {
         border-collapse: collapse;
-      }
-      table td {
-        border: 1px solid #cecece;
         width: 100%;
+      }
+      table td, table th {
+        padding: 0.3em;
+        border: 1px solid #cecece;
+      }
+      table th {
+        background: #f1f1f1;
       }
       .wrapper {
         padding: 0 1em;
@@ -62,6 +66,7 @@
       }
       fieldset {
         padding: 1em;
+        margin-bottom: 1em;
       }
       .card {
         background-color: #fff;
@@ -93,13 +98,13 @@
   </head>
   <body>
     <div class="wrapper">
-      <span id="sync-status-icon" style="display: none;">🔃</span>
+      <span id="sync-status-icon" style="display: none">🔃</span>
       <h1>Structured data entry PWA</h1>
       <div id="container"></div>
     </div>
     <script src="script.js"></script>
     <script>
-      if ("serviceWorker" in navigator && false) {
+      if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
           navigator.serviceWorker.register("/sw.js");
         });
@@ -117,7 +122,7 @@
       <div class="card config">
         <header>
           <h2 class="heading">Config</h2>
-          <button type="button" class="button close-card">X</button>
+          <button type="button" class="button close-card">❌</button>
         </header>
 
         <form>
@@ -134,7 +139,7 @@
       <div class="card namespace">
         <header>
           <h2 class="heading"></h2>
-          <button type="button" class="button close-card">X</button>
+          <button type="button" class="button close-card">❌</button>
         </header>
         <form>
           <fieldset></fieldset>
