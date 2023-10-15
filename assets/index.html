@@ -1,82 +1,152 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width initial-scale=1">
-  <title>Structured data entry PWA</title>
-  <meta name="description" content="Structured data entry PWA">
-  <meta name="theme-color" content="#FFE5B4"/>
-  <link rel="manifest" href="/manifest.json">
-  <link rel="apple-touch-icon" href="/icon_192.png">
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    body {
-      font-family: Arial, Helvetica, sans-serif;
-      background: #FFE5B4;
-    }
-    h1 {text-align: center; margin-bottom: .4em;}
-    /* div { border: 1px solid red} */
-    table {border-collapse: collapse;}
-    table td {border: 1px solid #cecece; width: 100%;}
-    .wrapper {padding: 0 1em; max-width: 600px;margin: 0 auto;}
-    label {display: block; font-weight: bold; margin-bottom: .6em;}
-    label > * {display: block; width: 100%;}
-    input {padding: 0.2em; font-size: 1.4em;}
-    input, select {
-      box-shadow: inset 1px 1px 3px #ccc;
-      border-radius: 5px;
-    }
-    button {padding: 0.2em; font-size: 1em;}
-    fieldset {padding: 1em}
-    .card {background-color: #fff; border-radius: 5px; margin-bottom: 1em; padding:.4em; border: 1px solid #cecece}
-    .home-container {display: flex; flex-wrap: wrap;}
-    .home-container > * {flex: 50%;}
-    .home-container button {padding: 1em .2em}
-    header {display: flex; justify-content: space-between;}
-  </style>
-</head>
-<body>
-  <div class="wrapper">
-    <h1>Structured data entry PWA</h1>
-    <div id="container"></div>
-  </div>
-  <script src="script.js"></script>
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js');
-      });
-    }
-  </script>
-
-  <template id="template-home">
-    <div class="card home">
-      <h2 class="heading">Home</h2>
-      <fieldset class="home-container"></fieldset>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width initial-scale=1" />
+    <title>Structured data entry PWA</title>
+    <meta name="description" content="Structured data entry PWA" />
+    <meta name="theme-color" content="#FFE5B4" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icon_192.png" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: Arial, Helvetica, sans-serif;
+        background: #ffe5b4;
+      }
+      h1 {
+        text-align: center;
+        margin-bottom: 0.4em;
+      }
+      /* div { border: 1px solid red} */
+      table {
+        border-collapse: collapse;
+      }
+      table td {
+        border: 1px solid #cecece;
+        width: 100%;
+      }
+      .wrapper {
+        padding: 0 1em;
+        max-width: 600px;
+        margin: 0 auto;
+      }
+      label {
+        display: block;
+        font-weight: bold;
+        margin-bottom: 0.6em;
+      }
+      label > * {
+        display: block;
+      }
+      input {
+        padding: 0.2em;
+        font-size: 1.4em;
+      }
+      input,
+      select {
+        box-shadow: inset 1px 1px 3px #ccc;
+        border-radius: 5px;
+        width: 100%;
+      }
+      input[type="checkbox"] {
+        width: auto;
+      }
+      button {
+        padding: 0.2em;
+        font-size: 1em;
+      }
+      fieldset {
+        padding: 1em;
+      }
+      .card {
+        background-color: #fff;
+        border-radius: 5px;
+        margin-bottom: 1em;
+        padding: 0.4em;
+        border: 1px solid #cecece;
+      }
+      .home-container {
+        display: flex;
+        flex-wrap: wrap;
+      }
+      .home-container > * {
+        flex: 50%;
+      }
+      .home-container button {
+        padding: 1em 0.2em;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+      }
+      #sync-status-icon {
+        font-size: 2em;
+        position: absolute;
+        right: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrapper">
+      <span id="sync-status-icon">🔃</span>
+      <h1>Structured data entry PWA</h1>
+      <div id="container"></div>
     </div>
-  </template>
+    <script src="script.js"></script>
+    <script>
+      if ("serviceWorker" in navigator && false) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("/sw.js");
+        });
+      }
+    </script>
 
-  <template id="template-namespace">
-    <div class="card namespace">
-      <header>
-        <h2 class="heading"></h2>
-        <button type="button" class="button close-card">X</button>
-      </header>
-      <form>
-        <fieldset></fieldset>
-        <fieldset>
-          <button type="submit" class="button add-record">add</button>
-        </fieldset>
-      </form>
-      <table>
-        <thead></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </template>
-</body>
+    <template id="template-home">
+      <div class="card home">
+        <h2 class="heading">Home</h2>
+        <fieldset class="home-container"></fieldset>
+      </div>
+    </template>
+
+    <template id="template-config">
+      <div class="card config">
+        <header>
+          <h2 class="heading">Config</h2>
+          <button type="button" class="button close-card">X</button>
+        </header>
+
+        <form>
+          <fieldset class="config-container"></fieldset>
+          <fieldset>
+            <button type="submit" class="button update-record">update</button>
+            <button type="button" class="button sync-now">sync now</button>
+          </fieldset>
+        </form>
+      </div>
+    </template>
+
+    <template id="template-namespace">
+      <div class="card namespace">
+        <header>
+          <h2 class="heading"></h2>
+          <button type="button" class="button close-card">X</button>
+        </header>
+        <form>
+          <fieldset></fieldset>
+          <fieldset>
+            <button type="submit" class="button add-record">add</button>
+          </fieldset>
+        </form>
+        <table>
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </template>
+  </body>
 </html>

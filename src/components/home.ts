@@ -1,23 +1,30 @@
 import { dom, run } from "utils";
 import { renderNamespace } from "./namespace";
 import { API } from "api/api";
+import { renderConfig } from "./config";
+import { ConfigService } from "config";
+import { ReplicationService } from "replication/replication";
 
 export const renderHome = async ({
   api,
+  replicationService,
+  configService,
   $container,
 }: {
   api: API;
+  replicationService: ReplicationService;
+  configService: ConfigService;
   $container: HTMLElement;
 }) => {
   const $templateHome = document.getElementById(
     "template-home"
   ) as HTMLTemplateElement;
   const $clone = $templateHome.content.cloneNode(true) as HTMLElement;
-  const $home = $clone.querySelector<HTMLDivElement>(".home-container");
+  const $homeContainer = $clone.querySelector<HTMLDivElement>(".home-container");
 
   const elements = await api.getHomeElements();
 
-  $home?.addEventListener("click", (e: MouseEvent) => {
+  $homeContainer?.addEventListener("click", (e: MouseEvent) => {
     // button click
     const target = e.target as HTMLButtonElement | null;
     if (!target) return;
@@ -26,8 +33,12 @@ export const renderHome = async ({
       e.preventDefault();
       const namespace = target.dataset["namespace"];
       if (namespace) {
-        if (namespace[0] === "$") {
-          // TODO: special page
+        if (namespace === "$config") {
+          renderConfig({
+            configService,
+            replicationService,
+            $container: $container,
+          })
         } else {
           renderNamespace({
             namespace,
@@ -53,7 +64,7 @@ export const renderHome = async ({
         );
         return button;
       })
-      .forEach((b) => $home?.appendChild(b))
+      .forEach((b) => $homeContainer?.appendChild(b))
   );
   $container.prepend($clone);
 }

@@ -6,7 +6,7 @@ ALL_ICONS := $(foreach resolution, $(resolutions), $(DIST)/icon_$(resolution).pn
 
 all: images copy_assets $(DIST)/sw.js
 
-build: $(DIST)/script.js
+build: clean-sw $(DIST)/script.js
 
 copy_assets:
 	cp $(ASSETS)/* $(DIST)
@@ -21,6 +21,10 @@ images: $(ALL_ICONS)
 
 $(DIST)/icon_%.png: $(ASSETS)/favicon.svg
 	inkscape $< -w $* -h $* --export-type=png --export-filename=$@
+
+.PHONY: clean
+clean-sw:
+	rm $(DIST)/workbox*
 
 .PHONY: clean
 clean:

@@ -1,46 +1,32 @@
 "use strict";
 (() => {
-  // src/storage/storage.ts
-  var EmptyMessageID = "-";
-  var newMessageID = (namespace, nodeID, counter) => `${namespace}.${nodeID}.${counter}.`;
-
-  // src/replication/replication.ts
-  var replication = (storage, config) => {
-    let lastUpdate = 0;
-    const replicate = () => {
-      const allMessages = storage.get();
-      const messages = allMessages.filter((m) => m.meta.ts > lastUpdate);
-      let cursor = EmptyMessageID;
-      if (allMessages.length > 0) {
-        cursor = allMessages[allMessages.length - 1].id;
-      }
-      const body = { cursor, messages };
-      console.log("REPLICATION >>>", body);
-      fetch(config.ReplicationURL, {
-        method: "POST",
-        cache: "no-cache",
-        headers: {
-          "Content-Type": "application/json",
-          "X-NodeID": config.ReplicationURL,
-          "Authorization": `Bearer : ${config.APIKey}`
-        },
-        body: JSON.stringify(body)
-      }).then((r) => {
-        if (r.ok) {
-          return r.json();
+  // src/api/api.ts
+  var namespaceConfigNamespace = "namespaceConfigV1";
+  var API = class {
+    constructor(storage) {
+      this.storage = storage;
+    }
+    async getHomeElements() {
+      return [
+        { namespace: "merkiV1", name: "merki" },
+        { namespace: "hranoprovodV1", name: "hranoprovod-cli" },
+        { namespace: "$config", name: "Config" }
+      ];
+    }
+    async getNamespaceConfig(namespace) {
+      return this.getNamespaceData(namespaceConfigNamespace).then(
+        (data) => data.find((c) => c.namespace === namespace) || {
+          namespace,
+          config: []
         }
-        throw "error sync";
-      }).then((body2) => {
-        console.log("REPLICATION <<<", body2);
-        lastUpdate = (/* @__PURE__ */ new Date()).getTime();
-        if (body2.messages) {
-          storage.append(body2.messages);
-        }
-      }).catch(console.error);
-    };
-    if (config.AutoReplication) {
-      replicate();
-      setInterval(replicate, config.ReplicationInterval);
+      );
+    }
+    async getNamespaceData(namespace) {
+      const data = await this.storage.get();
+      return data.filter((m) => m.meta.ns === namespace).map((m) => m.data);
+    }
+    async add(namespace, record) {
+      this.storage.add(namespace, record);
     }
   };
 
@@ -159,18 +145,121 @@
     $container.prepend($clone);
   };
 
+  // src/components/config.ts
+  var renderConfig = ({
+    configService,
+    replicationService,
+    $container
+  }) => {
+    const $templateConfig = document.getElementById(
+      "template-config"
+    );
+    const $clone = $templateConfig.content.cloneNode(true);
+    const $form = $clone.querySelector("form");
+    const $fieldset = $clone.querySelector("fieldset");
+    const $closeButton = $clone.querySelector(".close-card");
+    const $syncNowButton = $clone.querySelector(".sync-now");
+    $closeButton?.addEventListener("click", (e) => {
+      const card = $closeButton?.closest(".card");
+      if (card) {
+        card.remove();
+      }
+    });
+    if (!$fieldset) {
+      return;
+    }
+    $syncNowButton?.addEventListener("click", (e) => {
+      e.preventDefault();
+      replicationService.replicate();
+    });
+    $form?.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const formData = new FormData($form);
+      const data = Object.fromEntries(formData);
+      console.table(data);
+      const config = configService.save({
+        ...configService.get(),
+        ReplicationURL: data.ReplicationURL.toString(),
+        APIKey: data.APIKey.toString(),
+        ReplicationInterval: parseInt(data.ReplicationInterval.toString(), 10),
+        AutoReplication: (data.AutoReplication || "false") === "true" ? true : false
+      });
+      render(config);
+    });
+    const render = (config) => {
+      const fields = [
+        dom(
+          "label",
+          {},
+          "NodeID",
+          dom("input", {
+            type: "text",
+            value: config.NodeID,
+            disabled: "disabled"
+          })
+        ),
+        dom(
+          "label",
+          {},
+          "ReplicationURL",
+          dom("input", {
+            name: "ReplicationURL",
+            type: "text",
+            value: config.ReplicationURL
+          })
+        ),
+        dom(
+          "label",
+          {},
+          "APIKey",
+          dom("input", {
+            name: "APIKey",
+            type: "text",
+            value: config.APIKey
+          })
+        ),
+        dom(
+          "label",
+          {},
+          "ReplicationInterval",
+          dom("input", {
+            name: "ReplicationInterval",
+            type: "number",
+            value: config.ReplicationInterval
+          })
+        ),
+        dom(
+          "label",
+          {},
+          "AutoReplication",
+          dom("input", {
+            name: "AutoReplication",
+            type: "checkbox",
+            value: "true",
+            ...config.AutoReplication ? { checked: "checked" } : {}
+          })
+        )
+      ].map((f) => dom("div", {}, f));
+      $fieldset.replaceChildren(...fields);
+    };
+    render(configService.get());
+    $container.prepend($clone);
+  };
+
   // src/components/home.ts
   var renderHome = async ({
     api,
+    replicationService,
+    configService,
     $container
   }) => {
     const $templateHome = document.getElementById(
       "template-home"
     );
     const $clone = $templateHome.content.cloneNode(true);
-    const $home = $clone.querySelector(".home-container");
+    const $homeContainer = $clone.querySelector(".home-container");
     const elements = await api.getHomeElements();
-    $home?.addEventListener("click", (e) => {
+    $homeContainer?.addEventListener("click", (e) => {
       const target = e.target;
       if (!target)
         return;
@@ -178,7 +267,12 @@
         e.preventDefault();
         const namespace = target.dataset["namespace"];
         if (namespace) {
-          if (namespace[0] === "$") {
+          if (namespace === "$config") {
+            renderConfig({
+              configService,
+              replicationService,
+              $container
+            });
           } else {
             renderNamespace({
               namespace,
@@ -202,46 +296,89 @@
             el.name
           );
           return button;
-        }).forEach((b) => $home?.appendChild(b))
+        }).forEach((b) => $homeContainer?.appendChild(b))
       )
     );
     $container.prepend($clone);
   };
 
-  // src/app.ts
-  var app = (global, api) => {
-    const $container = global.document.getElementById("container");
-    renderHome({ api, $container });
+  // src/storage/storage.ts
+  var EmptyMessageID = "-";
+  var newMessageID = (namespace, nodeID, counter) => `${namespace}.${nodeID}.${counter}.`;
+
+  // src/replication/replication.ts
+  var replication = ({
+    storage,
+    configService,
+    onSyncStatus
+  }) => {
+    let lastUpdate = 0;
+    const replicate = () => {
+      const config = configService.get();
+      const allMessages = storage.get();
+      const messages = allMessages.filter((m) => m.meta.ts > lastUpdate);
+      let cursor = EmptyMessageID;
+      if (allMessages.length > 0) {
+        cursor = allMessages[allMessages.length - 1].id;
+      }
+      const body = { cursor, messages };
+      console.log("REPLICATION >>>", body);
+      onSyncStatus("SYNC");
+      fetch(config.ReplicationURL, {
+        method: "POST",
+        cache: "no-cache",
+        headers: {
+          "Content-Type": "application/json",
+          "X-NodeID": config.ReplicationURL,
+          "Authorization": `Bearer : ${config.APIKey}`
+        },
+        body: JSON.stringify(body)
+      }).then((r) => {
+        if (r.ok) {
+          return r.json();
+        }
+        throw "error sync";
+      }).then((body2) => {
+        console.log("REPLICATION <<<", body2);
+        lastUpdate = (/* @__PURE__ */ new Date()).getTime();
+        if (body2.messages) {
+          storage.append(body2.messages);
+        }
+      }).catch(console.error).finally(() => onSyncStatus("NO_SYNC"));
+      if (config.AutoReplication) {
+        setTimeout(replicate, config.ReplicationInterval);
+      }
+    };
+    if (configService.get().AutoReplication) {
+      replicate();
+    }
+    return {
+      replicate
+    };
   };
 
-  // src/api/api.ts
-  var namespaceConfigNamespace = "namespaceConfigV1";
-  var API = class {
-    constructor(storage) {
-      this.storage = storage;
-    }
-    async getHomeElements() {
-      return [
-        { namespace: "merkiV1", name: "merki" },
-        { namespace: "hranoprovodV1", name: "hranoprovod-cli" },
-        { namespace: "$config", name: "Config" }
-      ];
-    }
-    async getNamespaceConfig(namespace) {
-      return this.getNamespaceData(namespaceConfigNamespace).then(
-        (data) => data.find((c) => c.namespace === namespace) || {
-          namespace,
-          config: []
+  // src/app.ts
+  var app = ({
+    global,
+    storage,
+    configService
+  }) => {
+    const $container = global.document.getElementById(
+      "container"
+    );
+    const $syncStatusIcon = global.document.getElementById("sync-status-icon");
+    const api = new API(storage);
+    const onSyncStatus = (status) => {
+      if ($syncStatusIcon) {
+        if (status === "SYNC") {
+          $syncStatusIcon.style.display = "inline";
+        } else {
+          $syncStatusIcon.style.display = "none";
         }
-      );
-    }
-    async getNamespaceData(namespace) {
-      const data = await this.storage.get();
-      return data.filter((m) => m.meta.ns === namespace).map((m) => m.data);
-    }
-    async add(namespace, record) {
-      this.storage.add(namespace, record);
-    }
+      }
+    };
+    const replicationService = replication({ storage, configService, onSyncStatus });
+    renderHome({ api, configService, $container, replicationService });
   };
 
   // src/storage/localStorage.ts
@@ -251,11 +388,11 @@
       this.onlyNodeMessages = (messages) => messages.filter((m) => m.meta.node === this.nodeID);
       this.nodeID = nodeID;
     }
-    getState(storageKey2) {
-      return JSON.parse(localStorage.getItem(storageKey2) || "{}");
+    getState(storageKey) {
+      return JSON.parse(localStorage.getItem(storageKey) || "{}");
     }
-    setState(storageKey2, state) {
-      return localStorage.setItem(storageKey2, JSON.stringify(state));
+    setState(storageKey, state) {
+      return localStorage.setItem(storageKey, JSON.stringify(state));
     }
     add(namespace, data) {
       const state = this.getState(this.storageKey);
@@ -293,39 +430,46 @@
   };
 
   // src/config.ts
-  var storageKey = "CONFIG";
-  var getNodeID = () => `nd-${Math.ceil((/* @__PURE__ */ new Date()).getTime()).toString(36).toUpperCase()}`;
-  var loadConfig = () => {
-    const raw = localStorage.getItem(storageKey);
-    if (raw) {
-      return JSON.parse(raw);
-    }
-    return {};
-  };
-  var saveConfig = (c) => localStorage.setItem(storageKey, JSON.stringify(c));
-  var getConfig = () => {
-    const defaultConfig = {
-      NodeID: getNodeID(),
-      ReplicationURL: "http://localhost:3333/sync",
-      APIKey: "POTATO",
-      ReplicationInterval: 6e4,
-      AutoReplication: true
+  var getConfigService = () => {
+    const storageKey = "CONFIG";
+    const getNodeID = () => `nd-${Math.ceil((/* @__PURE__ */ new Date()).getTime()).toString(36).toUpperCase()}`;
+    const loadConfig = () => {
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        return JSON.parse(raw);
+      }
+      return {};
     };
-    const loadedConfig = loadConfig();
-    const config = { ...defaultConfig, ...loadedConfig };
-    if (loadedConfig != config) {
-      saveConfig(config);
-    }
-    return config;
+    const save = (c) => {
+      localStorage.setItem(storageKey, JSON.stringify(c));
+      return c;
+    };
+    const get = () => {
+      const defaultConfig = {
+        NodeID: getNodeID(),
+        ReplicationURL: "http://localhost:3333/sync",
+        APIKey: "POTATO",
+        ReplicationInterval: 6e4,
+        AutoReplication: true
+      };
+      const loadedConfig = loadConfig();
+      const config = { ...defaultConfig, ...loadedConfig };
+      if (loadedConfig != config) {
+        save(config);
+      }
+      return config;
+    };
+    return {
+      get,
+      save
+    };
   };
 
   // src/index.ts
   window.addEventListener("load", () => {
-    const config = getConfig();
-    console.log({ config });
+    const configService = getConfigService();
+    const config = configService.get();
     const storage = new LocalStorage(config.NodeID);
-    const api = new API(storage);
-    replication(storage, config);
-    app(window, api);
+    app({ global: window, storage, configService });
   });
 })();

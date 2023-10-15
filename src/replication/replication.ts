@@ -1,18 +1,30 @@
-import { Config } from "config";
+import { ConfigService } from "config";
 import { EmptyMessageID, IStorage } from "storage/storage";
+
+export type SyncStatus = 'SYNC' | 'NO_SYNC';
+
+export interface ReplicationService {
+  replicate(): void
+}
 
 export type ReplicationConfig = {
   interval: number;
   url: string;
 };
 
-export const replication = (
+export const replication = ({
+  storage,
+  configService,
+  onSyncStatus,
+}: {
   storage: IStorage,
-  config: Config,
-) => {
+  configService: ConfigService,
+  onSyncStatus: (status: SyncStatus)=> void,
+}) => {
   let lastUpdate = 0;
 
   const replicate = () => {
+    const config = configService.get();
     const allMessages = storage.get();
     const messages = allMessages.filter((m) => m.meta.ts > lastUpdate);
     let cursor = EmptyMessageID;
@@ -21,6 +33,7 @@ export const replication = (
     }
     const body = { cursor, messages }
     console.log("REPLICATION >>>", body);
+    onSyncStatus('SYNC');
     fetch(config.ReplicationURL, {
       method: "POST",
       cache: "no-cache",
@@ -46,10 +59,16 @@ export const replication = (
           storage.append(body.messages)
         }
       })
-      .catch(console.error);
+      .catch(console.error)
+      .finally(() => onSyncStatus('NO_SYNC'));
+      if (config.AutoReplication) {
+        setTimeout(replicate, config.ReplicationInterval);
+      }
   };
-  if (config.AutoReplication) {
+  if (configService.get().AutoReplication) {
     replicate();
-    setInterval(replicate, config.ReplicationInterval);
+  }
+  return {
+    replicate,
   }
 };
