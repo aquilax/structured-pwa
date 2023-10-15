@@ -1,4 +1,5 @@
-import { EmptyMessageID, IStorage, NodeID } from "storage/storage";
+import { Config } from "config";
+import { EmptyMessageID, IStorage } from "storage/storage";
 
 export type ReplicationConfig = {
   interval: number;
@@ -6,9 +7,8 @@ export type ReplicationConfig = {
 };
 
 export const replication = (
-  nodeID: NodeID,
   storage: IStorage,
-  config: ReplicationConfig
+  config: Config,
 ) => {
   let lastUpdate = 0;
 
@@ -21,12 +21,13 @@ export const replication = (
     }
     const body = { cursor, messages }
     console.log("REPLICATION >>>", body);
-    fetch(config.url, {
+    fetch(config.ReplicationURL, {
       method: "POST",
       cache: "no-cache",
       headers: {
         "Content-Type": "application/json",
-        "X-NodeID": nodeID,
+        "X-NodeID": config.ReplicationURL,
+        "Authorization": `Bearer : ${config.APIKey}`,
       },
       body: JSON.stringify(body),
     })
@@ -47,5 +48,8 @@ export const replication = (
       })
       .catch(console.error);
   };
-  setInterval(replicate, config.interval);
+  if (config.AutoReplication) {
+    replicate();
+    setInterval(replicate, config.ReplicationInterval);
+  }
 };

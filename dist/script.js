@@ -5,7 +5,7 @@
   var newMessageID = (namespace, nodeID, counter) => `${namespace}.${nodeID}.${counter}.`;
 
   // src/replication/replication.ts
-  var replication = (nodeID, storage, config) => {
+  var replication = (storage, config) => {
     let lastUpdate = 0;
     const replicate = () => {
       const allMessages = storage.get();
@@ -16,12 +16,13 @@
       }
       const body = { cursor, messages };
       console.log("REPLICATION >>>", body);
-      fetch(config.url, {
+      fetch(config.ReplicationURL, {
         method: "POST",
         cache: "no-cache",
         headers: {
           "Content-Type": "application/json",
-          "X-NodeID": nodeID
+          "X-NodeID": config.ReplicationURL,
+          "Authorization": `Bearer : ${config.APIKey}`
         },
         body: JSON.stringify(body)
       }).then((r) => {
@@ -37,7 +38,10 @@
         }
       }).catch(console.error);
     };
-    setInterval(replicate, config.interval);
+    if (config.AutoReplication) {
+      replicate();
+      setInterval(replicate, config.ReplicationInterval);
+    }
   };
 
   // src/utils.ts
@@ -123,15 +127,19 @@
     const render = (config2, data2) => {
       const formContent = config2.map(
         (cel) => dom(
-          "label",
+          "div",
           {},
-          cel.name,
-          dom("input", {
-            type: cel.type,
-            name: cel.name,
-            value: getDefaultValue(cel.type),
-            ...cel.required ? { required: "required" } : {}
-          })
+          dom(
+            "label",
+            {},
+            cel.name,
+            dom("input", {
+              type: cel.type,
+              name: cel.name,
+              value: getDefaultValue(cel.type),
+              ...cel.required ? { required: "required" } : {}
+            })
+          )
         )
       );
       $fieldset?.replaceChildren(...formContent);
@@ -160,7 +168,7 @@
       "template-home"
     );
     const $clone = $templateHome.content.cloneNode(true);
-    const $home = $clone.querySelector(".home");
+    const $home = $clone.querySelector(".home-container");
     const elements = await api.getHomeElements();
     $home?.addEventListener("click", (e) => {
       const target = e.target;
@@ -200,7 +208,7 @@
     $container.prepend($clone);
   };
 
-  // src/App.ts
+  // src/app.ts
   var app = (global, api) => {
     const $container = global.document.getElementById("container");
     renderHome({ api, $container });
@@ -240,13 +248,14 @@
   var LocalStorage = class {
     constructor(nodeID) {
       this.storageKey = "STORAGE";
+      this.onlyNodeMessages = (messages) => messages.filter((m) => m.meta.node === this.nodeID);
       this.nodeID = nodeID;
     }
-    getState(storageKey) {
-      return JSON.parse(localStorage.getItem(storageKey) || "{}");
+    getState(storageKey2) {
+      return JSON.parse(localStorage.getItem(storageKey2) || "{}");
     }
-    setState(storageKey, state) {
-      return localStorage.setItem(storageKey, JSON.stringify(state));
+    setState(storageKey2, state) {
+      return localStorage.setItem(storageKey2, JSON.stringify(state));
     }
     add(namespace, data) {
       const state = this.getState(this.storageKey);
@@ -254,6 +263,7 @@
       const message = {
         id: messageID,
         meta: {
+          node: this.nodeID,
           ns: namespace,
           op: "ADD",
           messageID: EmptyMessageID,
@@ -263,17 +273,18 @@
       };
       this.setState(this.storageKey, {
         ...state,
-        counter: (state.messages || []).length,
+        counter: this.onlyNodeMessages(state.messages || []).length,
         messages: [...state.messages || [], message]
       });
       return messageID;
     }
     append(messages) {
       const state = this.getState(this.storageKey);
+      const newMessages = [...state.messages || [], ...messages];
       this.setState(this.storageKey, {
         ...state,
-        counter: (state.messages || []).length,
-        messages: [...state.messages || [], ...messages]
+        counter: this.onlyNodeMessages(newMessages).length,
+        messages: newMessages
       });
     }
     get() {
@@ -281,21 +292,40 @@
     }
   };
 
+  // src/config.ts
+  var storageKey = "CONFIG";
+  var getNodeID = () => `nd-${Math.ceil((/* @__PURE__ */ new Date()).getTime()).toString(36).toUpperCase()}`;
+  var loadConfig = () => {
+    const raw = localStorage.getItem(storageKey);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+    return {};
+  };
+  var saveConfig = (c) => localStorage.setItem(storageKey, JSON.stringify(c));
+  var getConfig = () => {
+    const defaultConfig = {
+      NodeID: getNodeID(),
+      ReplicationURL: "http://localhost:3333/sync",
+      APIKey: "POTATO",
+      ReplicationInterval: 6e4,
+      AutoReplication: true
+    };
+    const loadedConfig = loadConfig();
+    const config = { ...defaultConfig, ...loadedConfig };
+    if (loadedConfig != config) {
+      saveConfig(config);
+    }
+    return config;
+  };
+
   // src/index.ts
   window.addEventListener("load", () => {
-    const nodeID = run(() => {
-      const nodeID2 = localStorage.getItem("NODE_ID");
-      if (nodeID2) {
-        return nodeID2;
-      }
-      const newNodeID = `nd${Math.ceil((/* @__PURE__ */ new Date()).getTime()).toString(36).toUpperCase()}`;
-      localStorage.setItem("NODE_ID", newNodeID);
-      return newNodeID;
-    });
-    console.log({ nodeID });
-    const storage = new LocalStorage(nodeID);
+    const config = getConfig();
+    console.log({ config });
+    const storage = new LocalStorage(config.NodeID);
     const api = new API(storage);
+    replication(storage, config);
     app(window, api);
-    replication(nodeID, storage, { interval: 1e3 * 60, url: "http://localhost:3333/sync" });
   });
 })();

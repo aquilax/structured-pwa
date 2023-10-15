@@ -1,22 +1,14 @@
 import { replication } from "replication/replication";
-import { app } from "./App";
+import { app } from "./app";
 import { API } from "./api/api";
 import { LocalStorage } from "storage/localStorage";
-import { run } from "utils";
+import { getConfig } from "config";
 
 window.addEventListener("load", () => {
-  const nodeID = run(() => {
-    const nodeID = localStorage.getItem('NODE_ID')
-    if (nodeID) {
-      return nodeID
-    }
-    const newNodeID = `nd${Math.ceil(new Date().getTime()).toString(36).toUpperCase()}`;
-    localStorage.setItem('NODE_ID', newNodeID)
-    return newNodeID;
-  })
-  console.log({nodeID});
-  const storage = new LocalStorage(nodeID);
+  const config = getConfig()
+  console.log({config});
+  const storage = new LocalStorage(config.NodeID);
   const api = new API(storage);
+  replication(storage, config)
   app(window, api);
-  replication(nodeID, storage, { interval: 1000 * 60, url: 'http://localhost:3333/sync'})
 });

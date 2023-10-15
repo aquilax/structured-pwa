@@ -7,6 +7,7 @@ export type MessageOperator = "ADD" | "UPDATE" | "DELETE";
 export type MessageData = any;
 
 export type MessageMeta = {
+  node: NodeID;
   ns: Namespace;
   op: MessageOperator;
   messageID: MaybeMessageID;

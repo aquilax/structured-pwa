@@ -27,12 +27,16 @@ export class LocalStorage implements IStorage {
     return localStorage.setItem(storageKey, JSON.stringify(state));
   }
 
+  private onlyNodeMessages = (messages: Message[]) =>
+    messages.filter(m => m.meta.node === this.nodeID)
+
   add(namespace: string, data: any): string {
     const state = this.getState(this.storageKey);
     const messageID = newMessageID(namespace, this.nodeID, (state.messages || []).length);
     const message: Message = {
       id: messageID,
       meta: {
+        node: this.nodeID,
         ns: namespace,
         op: "ADD",
         messageID: EmptyMessageID,
@@ -42,7 +46,7 @@ export class LocalStorage implements IStorage {
     };
     this.setState(this.storageKey, {
       ...state,
-      counter: (state.messages || []).length,
+      counter: this.onlyNodeMessages(state.messages || []).length,
       messages: [...(state.messages || []), message],
     });
     return messageID;
@@ -50,10 +54,11 @@ export class LocalStorage implements IStorage {
 
   append(messages: Message[]) {
     const state = this.getState(this.storageKey);
+    const newMessages = [...(state.messages || []), ...messages];
     this.setState(this.storageKey, {
       ...state,
-      counter: (state.messages || []).length,
-      messages: [...(state.messages || []), ...messages],
+      counter: this.onlyNodeMessages(newMessages).length,
+      messages: newMessages,
     });
   }
 

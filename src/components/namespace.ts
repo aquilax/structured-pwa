@@ -69,16 +69,18 @@ export const renderNamespace = async ({
 
   const render = (config: any[], data: any[]) => {
     const formContent = config.map((cel) =>
-      dom(
-        "label",
-        {},
-        cel.name,
-        dom("input", {
-          type: cel.type,
-          name: cel.name,
-          value: getDefaultValue(cel.type),
-          ...((cel.required) ? {required: 'required'}: {}),
-        })
+      dom('div', {},
+        dom(
+          "label",
+          {},
+          cel.name,
+          dom("input", {
+            type: cel.type,
+            name: cel.name,
+            value: getDefaultValue(cel.type),
+            ...((cel.required) ? {required: 'required'}: {}),
+          })
+        )
       )
     );
     // populate form
