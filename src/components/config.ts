@@ -27,23 +27,27 @@ export const renderConfig = ({
     }
   });
 
-  if (!$fieldset) { return }
+  if (!$fieldset) {
+    return;
+  }
 
-  $syncNowButton?.addEventListener('click', (e) => {
+  $syncNowButton?.addEventListener("click", (e) => {
     e.preventDefault();
     replicationService.replicate();
-  })
+  });
 
   $form?.addEventListener("submit", (e) => {
-    e.preventDefault()
+    e.preventDefault();
     const formData = new FormData($form);
     const data = Object.fromEntries(formData);
     console.table(data);
-    const config = configService.save({...configService.get(),
+    const config = configService.save({
+      ...configService.get(),
       ReplicationURL: data.ReplicationURL.toString(),
       APIKey: data.APIKey.toString(),
       ReplicationInterval: parseInt(data.ReplicationInterval.toString(), 10),
-      AutoReplication: (data.AutoReplication || 'false') === 'true' ? true : false,
+      AutoReplication:
+        (data.AutoReplication || "false") === "true" ? true : false,
     });
     render(config);
   });
@@ -57,7 +61,7 @@ export const renderConfig = ({
         dom("input", {
           type: "text",
           value: config.NodeID,
-          disabled: 'disabled',
+          disabled: "disabled",
         })
       ),
 
@@ -66,8 +70,8 @@ export const renderConfig = ({
         {},
         "ReplicationURL",
         dom("input", {
-          name: 'ReplicationURL',
-          type: "text",
+          name: "ReplicationURL",
+          type: "url",
           value: config.ReplicationURL,
         })
       ),
@@ -77,7 +81,7 @@ export const renderConfig = ({
         {},
         "APIKey",
         dom("input", {
-          name: 'APIKey',
+          name: "APIKey",
           type: "text",
           value: config.APIKey,
         })
@@ -88,7 +92,7 @@ export const renderConfig = ({
         {},
         "ReplicationInterval",
         dom("input", {
-          name: 'ReplicationInterval',
+          name: "ReplicationInterval",
           type: "number",
           value: config.ReplicationInterval,
         })
@@ -99,17 +103,22 @@ export const renderConfig = ({
         {},
         "AutoReplication",
         dom("input", {
-          name: 'AutoReplication',
+          name: "AutoReplication",
           type: "checkbox",
           value: "true",
           ...(config.AutoReplication ? { checked: "checked" } : {}),
         })
       ),
-      dom('em',{}, `Last update: ${ new Date(replicationService.getLastUpdate()).toLocaleString( 'sv', { timeZoneName: 'short' } ) }`)
-    ]
-      .map((f) => dom("div", {}, f))
+      dom(
+        "em",
+        {},
+        `Last update: ${new Date(
+          replicationService.getLastUpdate()
+        ).toLocaleString("sv", { timeZoneName: "short" })}`
+      ),
+    ].map((f) => dom("div", {}, f));
     $fieldset.replaceChildren(...fields);
-  }
+  };
   render(configService.get());
   $container.prepend($clone);
 };

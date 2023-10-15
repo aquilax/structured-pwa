@@ -43,7 +43,7 @@ export const getReplicationService = ({
       headers: {
         "Content-Type": "application/json",
         "X-NodeID": config.ReplicationURL,
-        "Authorization": `Bearer : ${config.APIKey}`,
+        "Authorization": `Bearer ${config.APIKey}`,
       },
       body: JSON.stringify(body),
     })

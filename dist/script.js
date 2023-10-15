@@ -204,7 +204,7 @@
           "ReplicationURL",
           dom("input", {
             name: "ReplicationURL",
-            type: "text",
+            type: "url",
             value: config.ReplicationURL
           })
         ),
@@ -239,7 +239,13 @@
             ...config.AutoReplication ? { checked: "checked" } : {}
           })
         ),
-        dom("em", {}, `Last update: ${new Date(replicationService.getLastUpdate()).toLocaleString("sv", { timeZoneName: "short" })}`)
+        dom(
+          "em",
+          {},
+          `Last update: ${new Date(
+            replicationService.getLastUpdate()
+          ).toLocaleString("sv", { timeZoneName: "short" })}`
+        )
       ].map((f) => dom("div", {}, f));
       $fieldset.replaceChildren(...fields);
     };
@@ -332,7 +338,7 @@
         headers: {
           "Content-Type": "application/json",
           "X-NodeID": config.ReplicationURL,
-          "Authorization": `Bearer : ${config.APIKey}`
+          "Authorization": `Bearer ${config.APIKey}`
         },
         body: JSON.stringify(body)
       }).then((r) => {
