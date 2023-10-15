@@ -5,6 +5,7 @@ export type SyncStatus = 'SYNC' | 'NO_SYNC';
 
 export interface ReplicationService {
   replicate(): void
+  getLastUpdate(): number
 }
 
 export type ReplicationConfig = {
@@ -12,7 +13,7 @@ export type ReplicationConfig = {
   url: string;
 };
 
-export const replication = ({
+export const getReplicationService = ({
   storage,
   configService,
   onSyncStatus,
@@ -22,6 +23,8 @@ export const replication = ({
   onSyncStatus: (status: SyncStatus)=> void,
 }) => {
   let lastUpdate = 0;
+
+  const getLastUpdate = () => lastUpdate;
 
   const replicate = () => {
     const config = configService.get();
@@ -70,5 +73,6 @@ export const replication = ({
   }
   return {
     replicate,
+    getLastUpdate,
   }
 };

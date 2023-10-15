@@ -105,6 +105,7 @@ export const renderConfig = ({
           ...(config.AutoReplication ? { checked: "checked" } : {}),
         })
       ),
+      dom('em',{}, `Last update: ${ new Date(replicationService.getLastUpdate()).toLocaleString( 'sv', { timeZoneName: 'short' } ) }`)
     ]
       .map((f) => dom("div", {}, f))
     $fieldset.replaceChildren(...fields);

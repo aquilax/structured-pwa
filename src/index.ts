@@ -1,4 +1,4 @@
-import { replication } from "replication/replication";
+import { getReplicationService } from "replication/replication";
 import { app } from "./app";
 import { API } from "./api/api";
 import { LocalStorage } from "storage/localStorage";

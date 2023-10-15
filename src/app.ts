@@ -1,7 +1,7 @@
 import { API } from "api/api";
 import { renderHome } from "components/home";
 import { ConfigService } from "config";
-import { SyncStatus, replication as getReplicationService } from "replication/replication";
+import { SyncStatus, getReplicationService as getReplicationService } from "replication/replication";
 import { IStorage } from "storage/storage";
 
 export const app = ({

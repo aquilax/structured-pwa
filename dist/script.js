@@ -238,7 +238,8 @@
             value: "true",
             ...config.AutoReplication ? { checked: "checked" } : {}
           })
-        )
+        ),
+        dom("em", {}, `Last update: ${new Date(replicationService.getLastUpdate()).toLocaleString("sv", { timeZoneName: "short" })}`)
       ].map((f) => dom("div", {}, f));
       $fieldset.replaceChildren(...fields);
     };
@@ -307,12 +308,13 @@
   var newMessageID = (namespace, nodeID, counter) => `${namespace}.${nodeID}.${counter}.`;
 
   // src/replication/replication.ts
-  var replication = ({
+  var getReplicationService = ({
     storage,
     configService,
     onSyncStatus
   }) => {
     let lastUpdate = 0;
+    const getLastUpdate = () => lastUpdate;
     const replicate = () => {
       const config = configService.get();
       const allMessages = storage.get();
@@ -353,7 +355,8 @@
       replicate();
     }
     return {
-      replicate
+      replicate,
+      getLastUpdate
     };
   };
 
@@ -377,7 +380,7 @@
         }
       }
     };
-    const replicationService = replication({ storage, configService, onSyncStatus });
+    const replicationService = getReplicationService({ storage, configService, onSyncStatus });
     renderHome({ api, configService, $container, replicationService });
   };
 
