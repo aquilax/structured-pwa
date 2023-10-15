@@ -1,3 +1,3 @@
-# if-pwa
+# structured-pwa
 
-Yet another Intermittent Fasting PWA tracker
+Offline first replicated structured data entry PWA from scratch
