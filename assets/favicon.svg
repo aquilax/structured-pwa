@@ -1,1 +1,50 @@
-<svg width="16" height="16" viewBox="0 0 4.233 4.233" xmlns="http://www.w3.org/2000/svg"><path style="fill:#fcaf3e;stroke-width:.265664" d="M0 0h4.233v4.233H0z"/><text xml:space="preserve" style="font-style:normal;font-weight:400;font-size:4.83794px;line-height:1.25;font-family:sans-serif;letter-spacing:0;word-spacing:0;fill:#8f5902;fill-opacity:1;stroke:none;stroke-width:.907113" x=".379" y="4.029"><tspan style="font-style:normal;font-variant:normal;font-weight:400;font-stretch:normal;font-family:Impact;-inkscape-font-specification:Impact;fill:#8f5902;stroke-width:.907113" x=".379" y="4.029">IF</tspan></text></svg>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="16"
+   height="16"
+   viewBox="0 0 4.233 4.233"
+   version="1.1"
+   id="svg87"
+   sodipodi:docname="favicon.svg"
+   inkscape:version="1.2.2 (b0a8486541, 2022-12-01)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs91" />
+  <sodipodi:namedview
+     id="namedview89"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     showgrid="false"
+     inkscape:zoom="17.991308"
+     inkscape:cx="-8.3373594"
+     inkscape:cy="10.227161"
+     inkscape:window-width="1896"
+     inkscape:window-height="1063"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg87" />
+  <path
+     style="fill:#e9b96e;stroke-width:0.265614"
+     d="M -8.001251e-4,0 H 4.2306009 V 4.233 H -8.001251e-4 Z"
+     id="path81" />
+  <text
+     xml:space="preserve"
+     style="font-style:normal;font-weight:400;font-size:4.0035px;line-height:1.25;font-family:sans-serif;letter-spacing:0;word-spacing:0;fill:#a40000;fill-opacity:1;stroke:none;stroke-width:0.750656"
+     x="0.15805027"
+     y="3.5490305"
+     id="text85"
+     transform="scale(0.92917201,1.076227)"><tspan
+       style="font-style:normal;font-variant:normal;font-weight:400;font-stretch:normal;font-family:Impact;-inkscape-font-specification:Impact;fill:#a40000;stroke-width:0.750656"
+       x="0.15805027"
+       y="3.5490305"
+       id="tspan83">SD</tspan></text>
+</svg>
