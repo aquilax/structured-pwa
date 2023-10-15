@@ -123,6 +123,7 @@
               type: cel.type,
               name: cel.name,
               value: getDefaultValue(cel.type),
+              autocapitalize: "none",
               ...cel.required ? { required: "required" } : {}
             })
           )
@@ -311,7 +312,7 @@
 
   // src/storage/storage.ts
   var EmptyMessageID = "-";
-  var newMessageID = (namespace, nodeID, counter) => `${namespace}.${nodeID}.${counter}.`;
+  var newMessageID = (namespace, nodeID, counter) => `${namespace}.${nodeID}.${counter}`;
 
   // src/replication/replication.ts
   var getReplicationService = ({

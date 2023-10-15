@@ -26,7 +26,7 @@ export const newMessageID = (
   namespace: Namespace,
   nodeID: NodeID,
   counter: number
-): MessageID => `${namespace}.${nodeID}.${counter}.`;
+): MessageID => `${namespace}.${nodeID}.${counter}`;
 
 
 export interface IStorage {

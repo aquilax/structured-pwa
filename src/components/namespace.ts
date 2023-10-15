@@ -78,6 +78,7 @@ export const renderNamespace = async ({
             type: cel.type,
             name: cel.name,
             value: getDefaultValue(cel.type),
+            autocapitalize: "none",
             ...((cel.required) ? {required: 'required'}: {}),
           })
         )
