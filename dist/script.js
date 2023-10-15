@@ -457,10 +457,10 @@
     const get = () => {
       const defaultConfig = {
         NodeID: getNodeID(),
-        ReplicationURL: "http://localhost:3333/sync",
-        APIKey: "POTATO",
+        ReplicationURL: "",
+        APIKey: "",
         ReplicationInterval: 6e4,
-        AutoReplication: true
+        AutoReplication: false
       };
       const loadedConfig = loadConfig();
       const config = { ...defaultConfig, ...loadedConfig };

@@ -35,10 +35,10 @@ export const getConfigService = () => {
   const get = (): Config => {
     const defaultConfig: Config = {
       NodeID: getNodeID(),
-      ReplicationURL: "http://localhost:3333/sync",
-      APIKey: "POTATO",
+      ReplicationURL: "",
+      APIKey: "",
       ReplicationInterval: 60000,
-      AutoReplication: true,
+      AutoReplication: false,
     };
     const loadedConfig = loadConfig();
     const config = { ...defaultConfig, ...loadedConfig };
