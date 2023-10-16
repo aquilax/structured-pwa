@@ -9,16 +9,7 @@
     }
     async getHomeElements() {
       const record = (await this.getNamespaceData(namespaceHome)).pop();
-      if (!record) {
-        const config = [
-          { namespace: "merkiV1", name: "merki" },
-          { namespace: "hranoprovodV1", name: "hranoprovod-cli" },
-          { namespace: "$config", name: "Config" }
-        ];
-        this.add(namespaceHome, { config });
-        return config;
-      }
-      return record.config || [];
+      return record?.config || [{ namespace: "$config", name: "Config" }];
     }
     async getNamespaceConfig(namespace) {
       return this.getNamespaceData(namespaceConfig).then(
