@@ -69,7 +69,9 @@ export const renderNamespace = async ({
 
   const render = (config: any[], data: any[]) => {
     const formContent = config.map((cel) =>
-      dom('div', {},
+      dom(
+        "div",
+        {},
         dom(
           "label",
           {},
@@ -79,7 +81,7 @@ export const renderNamespace = async ({
             name: cel.name,
             value: getDefaultValue(cel.type),
             autocapitalize: "none",
-            ...((cel.required) ? {required: 'required'}: {}),
+            ...(cel.required ? { required: "required" } : {}),
           })
         )
       )
@@ -91,12 +93,16 @@ export const renderNamespace = async ({
     // populate thead
     $thead?.replaceChildren(...theadContent);
 
-    const tbodyContent = data.reverse().map((row) => {
-      const tds = config.map((c) => {
-        return dom("td", {}, `${row[c.name]}`);
+    const tbodyContent = data
+      .sort((r1, r2) => r1.ts.localeCompare(r2.ts))
+      .reverse()
+      .slice(0, 30)
+      .map((row) => {
+        const tds = config.map((c) => {
+          return dom("td", {}, `${row[c.name]}`);
+        });
+        return dom("tr", {}, ...tds);
       });
-      return dom("tr", {}, ...tds);
-    });
     // populate tbody
     $tbody?.replaceChildren(...tbodyContent);
   };

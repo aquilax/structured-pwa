@@ -1,5 +1,5 @@
 export const getLocaleDateTime = (d: Date): string => {
-  return (new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString()).slice(0, -8); // remove timezone, ms and s
+  return (new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString()).slice(0, -5); // remove timezone, ms
 }
 
 export const run = <T>(cb: () => T ): T => cb()

@@ -32,7 +32,7 @@
 
   // src/utils.ts
   var getLocaleDateTime = (d) => {
-    return new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, -8);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, -5);
   };
   var run = (cb) => cb();
   var dom = (tag, attributes = {}, ...children) => {
@@ -132,7 +132,7 @@
       $fieldset?.replaceChildren(...formContent);
       const theadContent = config2.map((cel) => dom("th", {}, cel.name));
       $thead?.replaceChildren(...theadContent);
-      const tbodyContent = data2.reverse().map((row) => {
+      const tbodyContent = data2.sort((r1, r2) => r1.ts.localeCompare(r2.ts)).reverse().slice(0, 30).map((row) => {
         const tds = config2.map((c) => {
           return dom("td", {}, `${row[c.name]}`);
         });
