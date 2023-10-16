@@ -2,7 +2,7 @@ import { API } from "api/api";
 import { Namespace } from "storage/storage";
 import { dom, getLocaleDateTime, run } from "utils";
 
-type FieldType = string;
+type FieldType = "datetime-local" | "number" | "text";
 
 const getDefaultValue = (type: FieldType) => {
   if (type === "datetime-local") {
@@ -13,6 +13,13 @@ const getDefaultValue = (type: FieldType) => {
   }
   return "";
 };
+
+const formatValue = (type: FieldType, value: any) => {
+  if (type === "datetime-local") {
+    return value.replace('T', ' ')
+  }
+  return value
+}
 
 export const renderNamespace = async ({
   namespace,
@@ -99,7 +106,7 @@ export const renderNamespace = async ({
       .slice(0, 30)
       .map((row) => {
         const tds = config.map((c) => {
-          return dom("td", {}, `${row[c.name]}`);
+          return dom("td", {}, `${formatValue(c.type, row[c.name])}`);
         });
         return dom("tr", {}, ...tds);
       });

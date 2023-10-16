@@ -1,20 +1,27 @@
 "use strict";
 (() => {
   // src/api/api.ts
-  var namespaceConfigNamespace = "namespaceConfigV1";
+  var namespaceHome = "namespaceHomeV1";
+  var namespaceConfig = "namespaceConfigV1";
   var API = class {
     constructor(storage) {
       this.storage = storage;
     }
     async getHomeElements() {
-      return [
-        { namespace: "merkiV1", name: "merki" },
-        { namespace: "hranoprovodV1", name: "hranoprovod-cli" },
-        { namespace: "$config", name: "Config" }
-      ];
+      const record = (await this.getNamespaceData(namespaceHome)).pop();
+      if (!record) {
+        const config = [
+          { namespace: "merkiV1", name: "merki" },
+          { namespace: "hranoprovodV1", name: "hranoprovod-cli" },
+          { namespace: "$config", name: "Config" }
+        ];
+        this.add(namespaceHome, { config });
+        return config;
+      }
+      return record.config || [];
     }
     async getNamespaceConfig(namespace) {
-      return this.getNamespaceData(namespaceConfigNamespace).then(
+      return this.getNamespaceData(namespaceConfig).then(
         (data) => data.find((c) => c.namespace === namespace) || {
           namespace,
           config: []
@@ -68,6 +75,12 @@
       return 1;
     }
     return "";
+  };
+  var formatValue = (type, value) => {
+    if (type === "datetime-local") {
+      return value.replace("T", " ");
+    }
+    return value;
   };
   var renderNamespace = async ({
     namespace,
@@ -134,7 +147,7 @@
       $thead?.replaceChildren(...theadContent);
       const tbodyContent = data2.sort((r1, r2) => r1.ts.localeCompare(r2.ts)).reverse().slice(0, 30).map((row) => {
         const tds = config2.map((c) => {
-          return dom("td", {}, `${row[c.name]}`);
+          return dom("td", {}, `${formatValue(c.type, row[c.name])}`);
         });
         return dom("tr", {}, ...tds);
       });
@@ -395,13 +408,18 @@
   var LocalStorage = class {
     constructor(nodeID) {
       this.storageKey = "STORAGE";
+      this.cache = null;
       this.onlyNodeMessages = (messages) => messages.filter((m) => m.meta.node === this.nodeID);
       this.nodeID = nodeID;
     }
     getState(storageKey) {
-      return JSON.parse(localStorage.getItem(storageKey) || "{}");
+      if (!this.cache) {
+        this.cache = JSON.parse(localStorage.getItem(storageKey) || "{}");
+      }
+      return this.cache;
     }
     setState(storageKey, state) {
+      this.cache = state;
       return localStorage.setItem(storageKey, JSON.stringify(state));
     }
     add(namespace, data) {
@@ -420,7 +438,6 @@
       };
       this.setState(this.storageKey, {
         ...state,
-        counter: this.onlyNodeMessages(state.messages || []).length,
         messages: [...state.messages || [], message]
       });
       return messageID;
@@ -430,7 +447,6 @@
       const newMessages = [...state.messages || [], ...messages];
       this.setState(this.storageKey, {
         ...state,
-        counter: this.onlyNodeMessages(newMessages).length,
         messages: newMessages
       });
     }

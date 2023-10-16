@@ -7,23 +7,27 @@ import {
 } from "./storage";
 
 export type State = {
-  counter: number;
   messages: Message[];
 };
 
 export class LocalStorage implements IStorage {
   storageKey = "STORAGE";
   nodeID: NodeID;
+  cache: State|null = null;
 
   constructor(nodeID: NodeID) {
     this.nodeID = nodeID;
   }
 
   private getState(storageKey: string) {
-    return JSON.parse(localStorage.getItem(storageKey) || "{}") as State;
+    if (!this.cache) {
+      this.cache = JSON.parse(localStorage.getItem(storageKey) || "{}") as State;
+    }
+    return this.cache;
   }
 
   private setState(storageKey: string, state: State) {
+    this.cache = state;
     return localStorage.setItem(storageKey, JSON.stringify(state));
   }
 
@@ -46,7 +50,6 @@ export class LocalStorage implements IStorage {
     };
     this.setState(this.storageKey, {
       ...state,
-      counter: this.onlyNodeMessages(state.messages || []).length,
       messages: [...(state.messages || []), message],
     });
     return messageID;
@@ -57,7 +60,6 @@ export class LocalStorage implements IStorage {
     const newMessages = [...(state.messages || []), ...messages];
     this.setState(this.storageKey, {
       ...state,
-      counter: this.onlyNodeMessages(newMessages).length,
       messages: newMessages,
     });
   }

@@ -2,7 +2,8 @@ import { IStorage } from "storage/storage";
 
 type Namespace = string;
 
-const namespaceConfigNamespace: Namespace = "namespaceConfigV1";
+const namespaceHome: Namespace = "namespaceHomeV1";
+const namespaceConfig: Namespace = "namespaceConfigV1";
 
 export class API {
   storage: IStorage;
@@ -12,14 +13,21 @@ export class API {
   }
 
   async getHomeElements() {
-    return [
-      { namespace: "merkiV1", name: "merki" },
-      { namespace: "hranoprovodV1", name: "hranoprovod-cli" },
-      { namespace: "$config", name: "Config" },
-    ];
+    const record = (await this.getNamespaceData(namespaceHome)).pop()
+    if (!record) {
+      const config = [
+        { namespace: "merkiV1", name: "merki" },
+        { namespace: "hranoprovodV1", name: "hranoprovod-cli" },
+        { namespace: "$config", name: "Config" },
+      ]
+      this.add(namespaceHome, {config })
+      return config;
+    }
+    return record.config || [];
   }
+
   async getNamespaceConfig(namespace: Namespace) {
-    return this.getNamespaceData(namespaceConfigNamespace).then(
+    return this.getNamespaceData(namespaceConfig).then(
       (data) =>
         data.find((c) => c.namespace === namespace) || {
           namespace: namespace,
