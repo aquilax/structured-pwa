@@ -41,6 +41,7 @@ export const renderNamespace = async ({
   const $thead = $clone.querySelector<HTMLElement>("thead");
   const $tbody = $clone.querySelector<HTMLElement>("tbody");
   const $heading = $clone.querySelector<HTMLHeadElement>(".heading");
+  const $dataLists = $clone.querySelector<HTMLHeadElement>(".data-lists");
   const $closeButton = $clone.querySelector<HTMLHeadElement>(".close-card");
 
   if ($heading) {
@@ -102,7 +103,24 @@ export const renderNamespace = async ({
     }
   });
 
+  const getDataListOptions = (name: string, data: any[]) =>
+    Array.from(new Set(data.filter(i => i).map((i) => i[name])));
+
   const render = (config: any[], data: any[]) => {
+    const dataLists = config
+      .filter((c) => ["text", "string"].includes(c.type))
+      .map((c) => ({
+        name: c.name,
+        options: getDataListOptions(c.name, data),
+      }))
+      .filter(dl => dl.options.length > 0)
+      .map(dl =>
+        dom('datalist', {
+          id: `dl-${dl.name}`,
+        }, ...dl.options.map(o => dom('option', {}, o)))
+      )
+    $dataLists?.replaceChildren(...dataLists)
+
     const formContent = config.map((cel) =>
       dom(
         "div",
@@ -114,6 +132,7 @@ export const renderNamespace = async ({
           dom("input", {
             type: cel.type,
             name: cel.name,
+            list: `dl-${cel.name}`,
             value: getDefaultValue(cel.type),
             autocapitalize: "none",
             ...(cel.required ? { required: "required" } : {}),

@@ -87,6 +87,7 @@
     const $thead = $clone.querySelector("thead");
     const $tbody = $clone.querySelector("tbody");
     const $heading = $clone.querySelector(".heading");
+    const $dataLists = $clone.querySelector(".data-lists");
     const $closeButton = $clone.querySelector(".close-card");
     if ($heading) {
       $heading.innerText = namespace;
@@ -140,7 +141,17 @@
         });
       }
     });
+    const getDataListOptions = (name, data2) => Array.from(new Set(data2.filter((i) => i).map((i) => i[name])));
     const render = (config2, data2) => {
+      const dataLists = config2.filter((c) => ["text", "string"].includes(c.type)).map((c) => ({
+        name: c.name,
+        options: getDataListOptions(c.name, data2)
+      })).filter((dl) => dl.options.length > 0).map(
+        (dl) => dom("datalist", {
+          id: `dl-${dl.name}`
+        }, ...dl.options.map((o) => dom("option", {}, o)))
+      );
+      $dataLists?.replaceChildren(...dataLists);
       const formContent = config2.map(
         (cel) => dom(
           "div",
@@ -152,6 +163,7 @@
             dom("input", {
               type: cel.type,
               name: cel.name,
+              list: `dl-${cel.name}`,
               value: getDefaultValue(cel.type),
               autocapitalize: "none",
               ...cel.required ? { required: "required" } : {}
