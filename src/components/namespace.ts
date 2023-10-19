@@ -104,7 +104,7 @@ export const renderNamespace = async ({
   });
 
   const getDataListOptions = (name: string, data: any[]) =>
-    Array.from(new Set(data.filter(i => i).map((i) => i[name])));
+    Array.from(new Set(data.filter((i) => i).map((i) => i[name])));
 
   const render = (config: any[], data: any[]) => {
     const dataLists = config
@@ -113,13 +113,17 @@ export const renderNamespace = async ({
         name: c.name,
         options: getDataListOptions(c.name, data),
       }))
-      .filter(dl => dl.options.length > 0)
-      .map(dl =>
-        dom('datalist', {
-          id: `dl-${dl.name}`,
-        }, ...dl.options.map(o => dom('option', {}, o)))
-      )
-    $dataLists?.replaceChildren(...dataLists)
+      .filter((dl) => dl.options.length > 0)
+      .map((dl) =>
+        dom(
+          "datalist",
+          {
+            id: `dl-${dl.name}`,
+          },
+          ...dl.options.map((o) => dom("option", {}, o))
+        )
+      );
+    $dataLists?.replaceChildren(...dataLists);
 
     const formContent = config.map((cel) =>
       dom(
@@ -143,6 +147,7 @@ export const renderNamespace = async ({
     const quickEntry = dom("input", {
       class: "quick-entry",
       type: "text",
+      placeholder: "quick entry",
     });
     // populate form
     $fieldset?.replaceChildren(quickEntry, ...formContent);

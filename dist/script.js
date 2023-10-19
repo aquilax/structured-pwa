@@ -147,9 +147,13 @@
         name: c.name,
         options: getDataListOptions(c.name, data2)
       })).filter((dl) => dl.options.length > 0).map(
-        (dl) => dom("datalist", {
-          id: `dl-${dl.name}`
-        }, ...dl.options.map((o) => dom("option", {}, o)))
+        (dl) => dom(
+          "datalist",
+          {
+            id: `dl-${dl.name}`
+          },
+          ...dl.options.map((o) => dom("option", {}, o))
+        )
       );
       $dataLists?.replaceChildren(...dataLists);
       const formContent = config2.map(
@@ -173,7 +177,8 @@
       );
       const quickEntry2 = dom("input", {
         class: "quick-entry",
-        type: "text"
+        type: "text",
+        placeholder: "quick entry"
       });
       $fieldset?.replaceChildren(quickEntry2, ...formContent);
       const theadContent = config2.map((cel) => dom("th", {}, cel.name));
@@ -217,7 +222,9 @@
     }
     $syncNowButton?.addEventListener("click", (e) => {
       e.preventDefault();
-      replicationService.replicate();
+      replicationService.replicate().then(() => {
+        render(configService.get(), replicationService.getLastUpdate());
+      });
     });
     $form?.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -231,9 +238,9 @@
         ReplicationInterval: parseInt(data.ReplicationInterval.toString(), 10),
         AutoReplication: (data.AutoReplication || "false") === "true" ? true : false
       });
-      render(config);
+      render(config, replicationService.getLastUpdate());
     });
-    const render = (config) => {
+    const render = (config, lastUpdate) => {
       const fields = [
         dom(
           "label",
@@ -289,14 +296,12 @@
         dom(
           "em",
           {},
-          `Last update: ${new Date(
-            replicationService.getLastUpdate()
-          ).toLocaleString("sv", { timeZoneName: "short" })}`
+          `Last update: ${new Date(lastUpdate).toLocaleString("sv", { timeZoneName: "short" })}`
         )
       ].map((f) => dom("div", {}, f));
       $fieldset.replaceChildren(...fields);
     };
-    render(configService.get());
+    render(configService.get(), replicationService.getLastUpdate());
     $container.prepend($clone);
   };
 
@@ -378,11 +383,11 @@
       return state;
     };
     const getLastUpdate = () => loadState().lastUpdate;
-    const replicate = () => {
+    const replicate = async () => {
       const config = configService.get();
       const allMessages = storage.get();
       const state = loadState();
-      const messages = allMessages.filter((m) => m.meta.ts > state.lastUpdate);
+      const messages = storage.getAllAfter(state.cursor);
       let cursor = state.cursor;
       if (cursor === EmptyMessageID && allMessages.length > 0) {
         cursor = allMessages[allMessages.length - 1].id;
@@ -390,7 +395,7 @@
       const body = { cursor, messages };
       console.log("REPLICATION >>>", body);
       onSyncStatus("SYNC");
-      fetch(config.ReplicationURL, {
+      return fetch(config.ReplicationURL, {
         method: "POST",
         cache: "no-cache",
         headers: {
@@ -412,12 +417,14 @@
         saveState({
           ...loadState(),
           lastUpdate: (/* @__PURE__ */ new Date()).getTime(),
-          ...body2.cursor ? { cursor: body2.cursor } : {}
+          ...body2.cursor !== EmptyMessageID ? { cursor: body2.cursor } : {}
         });
-      }).catch(console.error).finally(() => onSyncStatus("NO_SYNC"));
-      if (config.AutoReplication) {
-        setTimeout(replicate, config.ReplicationInterval);
-      }
+      }).catch(console.error).finally(() => {
+        onSyncStatus("NO_SYNC");
+        if (config.AutoReplication) {
+          setTimeout(replicate, config.ReplicationInterval);
+        }
+      });
     };
     if (configService.get().AutoReplication) {
       replicate();
@@ -460,9 +467,16 @@
       this.onlyNodeMessages = (messages) => messages.filter((m) => m.meta.node === this.nodeID);
       this.nodeID = nodeID;
     }
+    getAllAfter(cursor) {
+      const all = this.getState(this.storageKey).messages || [];
+      const i = all.findLastIndex((m) => m.id == cursor);
+      return i === -1 ? all : all.slice(i + 1);
+    }
     getState(storageKey2) {
       if (!this.cache) {
-        this.cache = JSON.parse(localStorage.getItem(storageKey2) || "{}");
+        this.cache = JSON.parse(
+          localStorage.getItem(storageKey2) || "{}"
+        );
       }
       return this.cache;
     }
@@ -472,7 +486,11 @@
     }
     add(namespace, data) {
       const state = this.getState(this.storageKey);
-      const messageID = newMessageID(namespace, this.nodeID, (state.messages || []).length);
+      const messageID = newMessageID(
+        namespace,
+        this.nodeID,
+        (state.messages || []).length
+      );
       const message = {
         id: messageID,
         meta: {

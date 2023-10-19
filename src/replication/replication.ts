@@ -11,7 +11,7 @@ type State = {
 export type SyncStatus = 'SYNC' | 'NO_SYNC';
 
 export interface ReplicationService {
-  replicate(): void
+  replicate(): Promise<void>
   getLastUpdate(): number
 }
 
@@ -43,12 +43,11 @@ export const getReplicationService = ({
 
   const getLastUpdate = () => loadState().lastUpdate
 
-  const replicate = () => {
+  const replicate = async () => {
     const config = configService.get();
     const allMessages = storage.get();
     const state = loadState();
-    // TODO filter by cursor
-    const messages = allMessages.filter((m) => m.meta.ts > state.lastUpdate);
+    const messages = storage.getAllAfter(state.cursor);
 
     let cursor = state.cursor;
     if (cursor === EmptyMessageID && allMessages.length > 0) {
@@ -58,7 +57,7 @@ export const getReplicationService = ({
     const body = { cursor, messages }
     console.log("REPLICATION >>>", body);
     onSyncStatus('SYNC');
-    fetch(config.ReplicationURL, {
+    return fetch(config.ReplicationURL, {
       method: "POST",
       cache: "no-cache",
       headers: {
@@ -83,14 +82,16 @@ export const getReplicationService = ({
         saveState({
           ...loadState(),
           lastUpdate: new Date().getTime(),
-          ...(body.cursor ? {cursor: body.cursor} :{})
+          ...(body.cursor !== EmptyMessageID ? {cursor: body.cursor} :{})
         })
       })
       .catch(console.error)
-      .finally(() => onSyncStatus('NO_SYNC'));
-      if (config.AutoReplication) {
-        setTimeout(replicate, config.ReplicationInterval);
-      }
+      .finally(() => {
+        onSyncStatus('NO_SYNC')
+        if (config.AutoReplication) {
+          setTimeout(replicate, config.ReplicationInterval);
+        }
+      });
   };
   if (configService.get().AutoReplication) {
     replicate();

@@ -13,15 +13,23 @@ export type State = {
 export class LocalStorage implements IStorage {
   storageKey = "STORAGE";
   nodeID: NodeID;
-  cache: State|null = null;
+  cache: State | null = null;
 
   constructor(nodeID: NodeID) {
     this.nodeID = nodeID;
   }
 
+  getAllAfter(cursor: string): Message[] {
+    const all = this.getState(this.storageKey).messages || [];
+    const i = all.findLastIndex((m) => m.id == cursor);
+    return i === -1 ? all : all.slice(i+1);
+  }
+
   private getState(storageKey: string) {
     if (!this.cache) {
-      this.cache = JSON.parse(localStorage.getItem(storageKey) || "{}") as State;
+      this.cache = JSON.parse(
+        localStorage.getItem(storageKey) || "{}"
+      ) as State;
     }
     return this.cache;
   }
@@ -32,11 +40,15 @@ export class LocalStorage implements IStorage {
   }
 
   private onlyNodeMessages = (messages: Message[]) =>
-    messages.filter(m => m.meta.node === this.nodeID)
+    messages.filter((m) => m.meta.node === this.nodeID);
 
   add(namespace: string, data: any): string {
     const state = this.getState(this.storageKey);
-    const messageID = newMessageID(namespace, this.nodeID, (state.messages || []).length);
+    const messageID = newMessageID(
+      namespace,
+      this.nodeID,
+      (state.messages || []).length
+    );
     const message: Message = {
       id: messageID,
       meta: {

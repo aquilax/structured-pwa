@@ -20,7 +20,7 @@ export type Message = {
   data: MessageData;
 };
 
-export const EmptyMessageID = '-'
+export const EmptyMessageID = "-";
 
 export const newMessageID = (
   namespace: Namespace,
@@ -28,9 +28,9 @@ export const newMessageID = (
   counter: number
 ): MessageID => `${namespace}.${nodeID}.${counter}`;
 
-
 export interface IStorage {
-  add(ns: Namespace, data: any): MessageID
-  get(): Message[]
-  append(messages: Message[]): void
+  add(ns: Namespace, data: any): MessageID;
+  get(): Message[];
+  getAllAfter(cursor: MessageID): Message[];
+  append(messages: Message[]): void;
 }

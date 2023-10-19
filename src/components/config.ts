@@ -33,7 +33,9 @@ export const renderConfig = ({
 
   $syncNowButton?.addEventListener("click", (e) => {
     e.preventDefault();
-    replicationService.replicate();
+    replicationService.replicate().then(() => {
+      render(configService.get(), replicationService.getLastUpdate())
+    });
   });
 
   $form?.addEventListener("submit", (e) => {
@@ -49,10 +51,10 @@ export const renderConfig = ({
       AutoReplication:
         (data.AutoReplication || "false") === "true" ? true : false,
     });
-    render(config);
+    render(config, replicationService.getLastUpdate());
   });
 
-  const render = (config: Config) => {
+  const render = (config: Config, lastUpdate: number) => {
     const fields = [
       dom(
         "label",
@@ -112,13 +114,11 @@ export const renderConfig = ({
       dom(
         "em",
         {},
-        `Last update: ${new Date(
-          replicationService.getLastUpdate()
-        ).toLocaleString("sv", { timeZoneName: "short" })}`
+        `Last update: ${new Date(lastUpdate).toLocaleString("sv", { timeZoneName: "short" })}`
       ),
     ].map((f) => dom("div", {}, f));
     $fieldset.replaceChildren(...fields);
   };
-  render(configService.get());
+  render(configService.get(), replicationService.getLastUpdate());
   $container.prepend($clone);
 };
