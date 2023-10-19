@@ -16,10 +16,10 @@ const getDefaultValue = (type: FieldType) => {
 
 const formatValue = (type: FieldType, value: any) => {
   if (type === "datetime-local") {
-    return value.replace('T', ' ')
+    return value.replace("T", " ");
   }
-  return value
-}
+  return value;
+};
 
 export const renderNamespace = async ({
   namespace,
@@ -46,6 +46,34 @@ export const renderNamespace = async ({
   if ($heading) {
     $heading.innerText = namespace;
   }
+  if (!$fieldset) {
+    return;
+  }
+
+  const quickEntry = (value: string) => {
+    if (!value) {
+      return;
+    }
+    const el = value.split(" ");
+    const last = el.length > 1 ? el.pop() : null;
+    const rest = el.join(" ");
+    const [_skip, $f1, $f2] = Array.from(
+      $fieldset.querySelectorAll<HTMLInputElement>(
+        'input:not([type="datetime-local"])'
+      )
+    );
+    $f1.value = rest;
+    if (last) {
+      $f2.value = last;
+    }
+  };
+
+  $fieldset.addEventListener("input", (e) => {
+    const target = e.target as HTMLInputElement;
+    if (target && target.classList.contains("quick-entry")) {
+      quickEntry(target.value);
+    }
+  });
 
   $closeButton?.addEventListener("click", (e) => {
     const card = $closeButton?.closest(".card");
@@ -93,8 +121,12 @@ export const renderNamespace = async ({
         )
       )
     );
+    const quickEntry = dom("input", {
+      class: "quick-entry",
+      type: "text",
+    });
     // populate form
-    $fieldset?.replaceChildren(...formContent);
+    $fieldset?.replaceChildren(quickEntry, ...formContent);
 
     const theadContent = config.map((cel) => dom("th", {}, cel.name));
     // populate thead

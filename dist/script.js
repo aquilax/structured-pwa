@@ -91,6 +91,32 @@
     if ($heading) {
       $heading.innerText = namespace;
     }
+    if (!$fieldset) {
+      return;
+    }
+    const quickEntry = (value) => {
+      if (!value) {
+        return;
+      }
+      const el = value.split(" ");
+      const last = el.length > 1 ? el.pop() : null;
+      const rest = el.join(" ");
+      const [_skip, $f1, $f2] = Array.from(
+        $fieldset.querySelectorAll(
+          'input:not([type="datetime-local"])'
+        )
+      );
+      $f1.value = rest;
+      if (last) {
+        $f2.value = last;
+      }
+    };
+    $fieldset.addEventListener("input", (e) => {
+      const target = e.target;
+      if (target && target.classList.contains("quick-entry")) {
+        quickEntry(target.value);
+      }
+    });
     $closeButton?.addEventListener("click", (e) => {
       const card = $closeButton?.closest(".card");
       if (card) {
@@ -133,7 +159,11 @@
           )
         )
       );
-      $fieldset?.replaceChildren(...formContent);
+      const quickEntry2 = dom("input", {
+        class: "quick-entry",
+        type: "text"
+      });
+      $fieldset?.replaceChildren(quickEntry2, ...formContent);
       const theadContent = config2.map((cel) => dom("th", {}, cel.name));
       $thead?.replaceChildren(...theadContent);
       const tbodyContent = data2.sort((r1, r2) => r1.ts.localeCompare(r2.ts)).reverse().slice(0, 30).map((row) => {
@@ -319,19 +349,30 @@
   var newMessageID = (namespace, nodeID, counter) => `${namespace}.${nodeID}.${counter}`;
 
   // src/replication/replication.ts
+  var storageKey = "REPLICATION";
   var getReplicationService = ({
     storage,
     configService,
     onSyncStatus
   }) => {
-    let lastUpdate = 0;
-    const getLastUpdate = () => lastUpdate;
+    const loadState = () => {
+      return JSON.parse(localStorage.getItem(storageKey) || "null") || {
+        cursor: EmptyMessageID,
+        lastUpdate: 0
+      };
+    };
+    const saveState = (state) => {
+      localStorage.setItem(storageKey, JSON.stringify(state));
+      return state;
+    };
+    const getLastUpdate = () => loadState().lastUpdate;
     const replicate = () => {
       const config = configService.get();
       const allMessages = storage.get();
-      const messages = allMessages.filter((m) => m.meta.ts > lastUpdate);
-      let cursor = EmptyMessageID;
-      if (allMessages.length > 0) {
+      const state = loadState();
+      const messages = allMessages.filter((m) => m.meta.ts > state.lastUpdate);
+      let cursor = state.cursor;
+      if (cursor === EmptyMessageID && allMessages.length > 0) {
         cursor = allMessages[allMessages.length - 1].id;
       }
       const body = { cursor, messages };
@@ -353,10 +394,14 @@
         throw "error sync";
       }).then((body2) => {
         console.log("REPLICATION <<<", body2);
-        lastUpdate = (/* @__PURE__ */ new Date()).getTime();
         if (body2.messages) {
           storage.append(body2.messages);
         }
+        saveState({
+          ...loadState(),
+          lastUpdate: (/* @__PURE__ */ new Date()).getTime(),
+          ...body2.cursor ? { cursor: body2.cursor } : {}
+        });
       }).catch(console.error).finally(() => onSyncStatus("NO_SYNC"));
       if (config.AutoReplication) {
         setTimeout(replicate, config.ReplicationInterval);
@@ -403,15 +448,15 @@
       this.onlyNodeMessages = (messages) => messages.filter((m) => m.meta.node === this.nodeID);
       this.nodeID = nodeID;
     }
-    getState(storageKey) {
+    getState(storageKey2) {
       if (!this.cache) {
-        this.cache = JSON.parse(localStorage.getItem(storageKey) || "{}");
+        this.cache = JSON.parse(localStorage.getItem(storageKey2) || "{}");
       }
       return this.cache;
     }
-    setState(storageKey, state) {
+    setState(storageKey2, state) {
       this.cache = state;
-      return localStorage.setItem(storageKey, JSON.stringify(state));
+      return localStorage.setItem(storageKey2, JSON.stringify(state));
     }
     add(namespace, data) {
       const state = this.getState(this.storageKey);
@@ -448,17 +493,17 @@
 
   // src/config.ts
   var getConfigService = () => {
-    const storageKey = "CONFIG";
+    const storageKey2 = "CONFIG";
     const getNodeID = () => `nd-${Math.ceil((/* @__PURE__ */ new Date()).getTime()).toString(36).toUpperCase()}`;
     const loadConfig = () => {
-      const raw = localStorage.getItem(storageKey);
+      const raw = localStorage.getItem(storageKey2);
       if (raw) {
         return JSON.parse(raw);
       }
       return {};
     };
     const save = (c) => {
-      localStorage.setItem(storageKey, JSON.stringify(c));
+      localStorage.setItem(storageKey2, JSON.stringify(c));
       return c;
     };
     const get = () => {

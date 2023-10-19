@@ -1,5 +1,12 @@
 import { ConfigService } from "config";
-import { EmptyMessageID, IStorage } from "storage/storage";
+import { EmptyMessageID, IStorage, MessageID } from "storage/storage";
+
+const storageKey = 'REPLICATION';
+
+type State = {
+  cursor: MessageID;
+  lastUpdate: number;
+}
 
 export type SyncStatus = 'SYNC' | 'NO_SYNC';
 
@@ -22,18 +29,32 @@ export const getReplicationService = ({
   configService: ConfigService,
   onSyncStatus: (status: SyncStatus)=> void,
 }) => {
-  let lastUpdate = 0;
+  const loadState=() => {
+    return JSON.parse(localStorage.getItem(storageKey) || 'null') || {
+      cursor: EmptyMessageID,
+      lastUpdate: 0
+    }
+  }
 
-  const getLastUpdate = () => lastUpdate;
+  const saveState = (state: State)=> {
+    localStorage.setItem(storageKey, JSON.stringify(state));
+    return state
+  }
+
+  const getLastUpdate = () => loadState().lastUpdate
 
   const replicate = () => {
     const config = configService.get();
     const allMessages = storage.get();
-    const messages = allMessages.filter((m) => m.meta.ts > lastUpdate);
-    let cursor = EmptyMessageID;
-    if (allMessages.length > 0) {
+    const state = loadState();
+    // TODO filter by cursor
+    const messages = allMessages.filter((m) => m.meta.ts > state.lastUpdate);
+
+    let cursor = state.cursor;
+    if (cursor === EmptyMessageID && allMessages.length > 0) {
       cursor = allMessages[allMessages.length - 1].id;
     }
+
     const body = { cursor, messages }
     console.log("REPLICATION >>>", body);
     onSyncStatus('SYNC');
@@ -55,12 +76,15 @@ export const getReplicationService = ({
       })
       .then((body) => {
         console.log("REPLICATION <<<",  body );
-        // TODO: make this more atomic
-        lastUpdate = new Date().getTime();
         if (body.messages) {
           // store new messages
           storage.append(body.messages)
         }
+        saveState({
+          ...loadState(),
+          lastUpdate: new Date().getTime(),
+          ...(body.cursor ? {cursor: body.cursor} :{})
+        })
       })
       .catch(console.error)
       .finally(() => onSyncStatus('NO_SYNC'));
