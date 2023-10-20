@@ -104,7 +104,7 @@ export const renderNamespace = async ({
   });
 
   const getDataListOptions = (name: string, data: any[]) =>
-    Array.from(new Set(data.filter((i) => i).map((i) => i[name])));
+    Array.from(new Set(data.filter((i) => i).map((i) => i[name].trim())));
 
   const render = (config: any[], data: any[]) => {
     const dataLists = config
@@ -148,6 +148,7 @@ export const renderNamespace = async ({
       class: "quick-entry",
       type: "text",
       placeholder: "quick entry",
+      autocapitalize: "none",
     });
     // populate form
     $fieldset?.replaceChildren(quickEntry, ...formContent);

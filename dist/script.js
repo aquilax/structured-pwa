@@ -141,7 +141,7 @@
         });
       }
     });
-    const getDataListOptions = (name, data2) => Array.from(new Set(data2.filter((i) => i).map((i) => i[name])));
+    const getDataListOptions = (name, data2) => Array.from(new Set(data2.filter((i) => i).map((i) => i[name].trim())));
     const render = (config2, data2) => {
       const dataLists = config2.filter((c) => ["text", "string"].includes(c.type)).map((c) => ({
         name: c.name,
@@ -178,7 +178,8 @@
       const quickEntry2 = dom("input", {
         class: "quick-entry",
         type: "text",
-        placeholder: "quick entry"
+        placeholder: "quick entry",
+        autocapitalize: "none"
       });
       $fieldset?.replaceChildren(quickEntry2, ...formContent);
       const theadContent = config2.map((cel) => dom("th", {}, cel.name));
