@@ -1,12 +1,33 @@
-import { getReplicationService } from "replication/replication";
+import {
+  ReplicationState,
+  defaultReplicationState,
+  getReplicationService,
+  replicationStorageKey,
+} from "replication/replication";
 import { app } from "./app";
-import { API } from "./api/api";
-import { LocalStorage } from "storage/localStorage";
-import { getConfigService } from "config";
+import { ConfigState, configStorageKey, getConfigService } from "config";
+import {
+  MessagesState,
+  defaultMessagesState,
+  localStorageAdapter,
+  localStorageService,
+  messagesStorageKey,
+  withCache,
+} from "storage/localStorage";
+import { API } from "api/api";
 
 window.addEventListener("load", () => {
-  const configService = getConfigService();
+  const messagesStorage = withCache(localStorageAdapter<MessagesState>(messagesStorageKey, defaultMessagesState));
+  const configStorage = localStorageAdapter<ConfigState>(configStorageKey, {});
+  const replicationStorage = localStorageAdapter<ReplicationState>(replicationStorageKey, defaultReplicationState);
+
+  const configService = getConfigService(configStorage);
   const config = configService.get();
-  const storage = new LocalStorage(config.NodeID);
-  app({ global: window, storage, configService });
+
+  const storage = localStorageService(config.NodeID, messagesStorage);
+  const replicationService = getReplicationService({ storage, configService, replicationStorage });
+
+  const api = new API(storage);
+
+  app({ global: window, api, configService, replicationService });
 });

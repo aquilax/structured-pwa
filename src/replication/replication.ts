@@ -1,18 +1,20 @@
 import { ConfigService } from "config";
-import { EmptyMessageID, IStorage, MessageID } from "storage/storage";
+import { StorageAdapter } from "storage/localStorage";
+import { EmptyMessageID, IStorageAPI, MessageID } from "storage/storage";
 
-const storageKey = 'REPLICATION';
+export const replicationStorageKey = "REPLICATION";
 
-type State = {
+export type ReplicationState = {
   cursor: MessageID;
   lastUpdate: number;
-}
+};
 
-export type SyncStatus = 'SYNC' | 'NO_SYNC';
+export type SyncStatus = "SYNC" | "NO_SYNC";
 
 export interface ReplicationService {
-  replicate(): Promise<void>
-  getLastUpdate(): number
+  replicate(): Promise<void>;
+  getLastUpdate(): number;
+  setOnSyncStatus(cb: OnSyncStatus): void;
 }
 
 export type ReplicationConfig = {
@@ -20,28 +22,31 @@ export type ReplicationConfig = {
   url: string;
 };
 
+export const defaultReplicationState = {
+  cursor: EmptyMessageID,
+  lastUpdate: 0,
+};
+
+export type OnSyncStatus = (status: SyncStatus) => void;
+
 export const getReplicationService = ({
   storage,
+  replicationStorage,
   configService,
   onSyncStatus,
 }: {
-  storage: IStorage,
-  configService: ConfigService,
-  onSyncStatus: (status: SyncStatus)=> void,
+  storage: IStorageAPI;
+  replicationStorage: StorageAdapter<ReplicationState>;
+  configService: ConfigService;
+  onSyncStatus?: OnSyncStatus;
 }) => {
-  const loadState=() => {
-    return JSON.parse(localStorage.getItem(storageKey) || 'null') || {
-      cursor: EmptyMessageID,
-      lastUpdate: 0
-    }
-  }
+  let _onSyncStatus = onSyncStatus || (() => {});
 
-  const saveState = (state: State)=> {
-    localStorage.setItem(storageKey, JSON.stringify(state));
-    return state
-  }
+  const loadState = () => replicationStorage.get();
 
-  const getLastUpdate = () => loadState().lastUpdate
+  const saveState = (state: ReplicationState) => replicationStorage.set(state);
+
+  const getLastUpdate = () => loadState().lastUpdate;
 
   const replicate = async () => {
     const config = configService.get();
@@ -54,16 +59,16 @@ export const getReplicationService = ({
       cursor = allMessages[allMessages.length - 1].id;
     }
 
-    const body = { cursor, messages }
+    const body = { cursor, messages };
     console.log("REPLICATION >>>", body);
-    onSyncStatus('SYNC');
+    _onSyncStatus("SYNC");
     return fetch(config.ReplicationURL, {
       method: "POST",
       cache: "no-cache",
       headers: {
         "Content-Type": "application/json",
-        "X-NodeID": config.ReplicationURL,
-        "Authorization": `Bearer ${config.APIKey}`,
+        "X-NodeID": config.NodeID,
+        Authorization: `Bearer ${config.APIKey}`,
       },
       body: JSON.stringify(body),
     })
@@ -74,20 +79,20 @@ export const getReplicationService = ({
         throw "error sync";
       })
       .then((body) => {
-        console.log("REPLICATION <<<",  body );
+        console.log("REPLICATION <<<", body);
         if (body.messages) {
           // store new messages
-          storage.append(body.messages)
+          storage.append(body.messages);
         }
         saveState({
           ...loadState(),
           lastUpdate: new Date().getTime(),
-          ...(body.cursor !== EmptyMessageID ? {cursor: body.cursor} :{})
-        })
+          ...(body.cursor !== EmptyMessageID ? { cursor: body.cursor } : {}),
+        });
       })
       .catch(console.error)
       .finally(() => {
-        onSyncStatus('NO_SYNC')
+        _onSyncStatus("NO_SYNC");
         if (config.AutoReplication) {
           setTimeout(replicate, config.ReplicationInterval);
         }
@@ -99,5 +104,6 @@ export const getReplicationService = ({
   return {
     replicate,
     getLastUpdate,
-  }
+    setOnSyncStatus: (cb: OnSyncStatus) => (_onSyncStatus = cb),
+  };
 };

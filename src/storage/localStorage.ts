@@ -1,58 +1,57 @@
-import {
-  Message,
-  NodeID,
-  IStorage,
-  newMessageID,
-  EmptyMessageID,
-} from "./storage";
+import { Message, NodeID, IStorageAPI, newMessageID, EmptyMessageID, Namespace, MessageID } from "./storage";
 
-export type State = {
+export const messagesStorageKey = "STORAGE";
+
+export type StorageKey = string;
+export type MessagesState = {
   messages: Message[];
 };
 
-export class LocalStorage implements IStorage {
-  storageKey = "STORAGE";
-  nodeID: NodeID;
-  cache: State | null = null;
+export const defaultMessagesState = {
+  messages: [],
+};
 
-  constructor(nodeID: NodeID) {
-    this.nodeID = nodeID;
-  }
+export interface StorageAdapter<T> {
+  get(): T;
+  set(data: T): T;
+}
 
-  getAllAfter(cursor: string): Message[] {
-    const all = this.getState(this.storageKey).messages || [];
-    const i = all.findLastIndex((m) => m.id == cursor);
-    return i === -1 ? all : all.slice(i+1);
-  }
+export const localStorageAdapter = <T>(storageKey: StorageKey, def: Partial<T> = {} as T): StorageAdapter<T> => {
+  const get = () => JSON.parse(localStorage.getItem(storageKey) || "null") || def;
 
-  private getState(storageKey: string) {
-    if (!this.cache) {
-      this.cache = JSON.parse(
-        localStorage.getItem(storageKey) || "{}"
-      ) as State;
-    }
-    return this.cache;
-  }
+  const set = (data: T): T => {
+    localStorage.setItem(storageKey, JSON.stringify(data));
+    return data;
+  };
 
-  private setState(storageKey: string, state: State) {
-    this.cache = state;
-    return localStorage.setItem(storageKey, JSON.stringify(state));
-  }
+  return {
+    get,
+    set,
+  };
+};
 
-  private onlyNodeMessages = (messages: Message[]) =>
-    messages.filter((m) => m.meta.node === this.nodeID);
+export const withCache = <T>(f: StorageAdapter<T>) => {
+  let cache: T | null = null;
+  const get = () => (cache ? cache : f.get());
+  const set = (data: T): T => {
+    cache = null;
+    return f.set(data);
+  };
 
-  add(namespace: string, data: any): string {
-    const state = this.getState(this.storageKey);
-    const messageID = newMessageID(
-      namespace,
-      this.nodeID,
-      (state.messages || []).length
-    );
+  return {
+    get,
+    set,
+  };
+};
+
+export const localStorageService = (nodeID: NodeID, messageStorage: StorageAdapter<MessagesState>): IStorageAPI => {
+  const add = (namespace: Namespace, data: any): MessageID => {
+    const state = messageStorage.get();
+    const messageID = newMessageID(namespace, nodeID, (state.messages || []).length);
     const message: Message = {
       id: messageID,
       meta: {
-        node: this.nodeID,
+        node: nodeID,
         ns: namespace,
         op: "ADD",
         messageID: EmptyMessageID,
@@ -60,23 +59,33 @@ export class LocalStorage implements IStorage {
       },
       data: data,
     };
-    this.setState(this.storageKey, {
+    messageStorage.set({
       ...state,
       messages: [...(state.messages || []), message],
     });
     return messageID;
-  }
+  };
 
-  append(messages: Message[]) {
-    const state = this.getState(this.storageKey);
+  const get = (): Message[] => messageStorage.get().messages;
+
+  const getAllAfter = (cursor: MessageID): Message[] => {
+    const all = get();
+    const i = all.findLastIndex((m) => m.id == cursor);
+    return i === -1 ? all : all.slice(i + 1);
+  };
+  const append = (messages: Message[]): void => {
+    const state = messageStorage.get();
     const newMessages = [...(state.messages || []), ...messages];
-    this.setState(this.storageKey, {
+    messageStorage.set({
       ...state,
       messages: newMessages,
     });
-  }
+  };
 
-  get() {
-    return this.getState(this.storageKey).messages || [];
-  }
-}
+  return {
+    add,
+    get,
+    getAllAfter,
+    append,
+  };
+};

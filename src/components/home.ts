@@ -16,9 +16,7 @@ export const renderHome = async ({
   configService: ConfigService;
   $container: HTMLElement;
 }) => {
-  const $templateHome = document.getElementById(
-    "template-home"
-  ) as HTMLTemplateElement;
+  const $templateHome = document.getElementById("template-home") as HTMLTemplateElement;
   const $clone = $templateHome.content.cloneNode(true) as HTMLElement;
   const $homeContainer = $clone.querySelector<HTMLDivElement>(".home-container");
 
@@ -38,7 +36,7 @@ export const renderHome = async ({
             configService,
             replicationService,
             $container: $container,
-          })
+          });
         } else {
           renderNamespace({
             namespace,
@@ -67,4 +65,4 @@ export const renderHome = async ({
       .forEach((b) => $homeContainer?.appendChild(b))
   );
   $container.prepend($clone);
-}
+};

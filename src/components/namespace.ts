@@ -30,9 +30,8 @@ export const renderNamespace = async ({
   api: API;
   $container: HTMLElement;
 }) => {
-  const $templateNamespace = document.getElementById(
-    "template-namespace"
-  ) as HTMLTemplateElement;
+  const autofocus = ".quick-entry";
+  const $templateNamespace = document.getElementById("template-namespace") as HTMLTemplateElement;
 
   const $clone = $templateNamespace.content.cloneNode(true) as HTMLElement;
 
@@ -59,9 +58,7 @@ export const renderNamespace = async ({
     const last = el.length > 1 ? el.pop() : null;
     const rest = el.join(" ");
     const [_skip, $f1, $f2] = Array.from(
-      $fieldset.querySelectorAll<HTMLInputElement>(
-        'input:not([type="datetime-local"])'
-      )
+      $fieldset.querySelectorAll<HTMLInputElement>('input:not([type="datetime-local"])')
     );
     $f1.value = rest;
     if (last) {
@@ -92,10 +89,7 @@ export const renderNamespace = async ({
       console.table(data);
       api.add(namespace, data).then(() => {
         // repopulate table
-        Promise.all([
-          api.getNamespaceConfig(namespace),
-          api.getNamespaceData(namespace),
-        ]).then(([namespace, data]) => {
+        Promise.all([api.getNamespaceConfig(namespace), api.getNamespaceData(namespace)]).then(([namespace, data]) => {
           const { config } = namespace;
           render(config, data);
         });
@@ -129,27 +123,27 @@ export const renderNamespace = async ({
       dom(
         "div",
         {},
-        dom(
-          "label",
-          {},
-          cel.name,
-          dom("input", {
-            type: cel.type,
-            name: cel.name,
-            list: `dl-${cel.name}`,
-            value: getDefaultValue(cel.type),
-            autocapitalize: "none",
-            ...(cel.required ? { required: "required" } : {}),
-          })
-        )
+        dom("label", {}, cel.name),
+        dom("input", {
+          type: cel.type,
+          name: cel.name,
+          list: `dl-${cel.name}`,
+          value: getDefaultValue(cel.type),
+          autocapitalize: "none",
+          ...(cel.required ? { required: "required" } : {}),
+        })
       )
     );
-    const quickEntry = dom("input", {
-      class: "quick-entry",
-      type: "text",
-      placeholder: "quick entry",
-      autocapitalize: "none",
-    });
+    const quickEntry = dom(
+      "div",
+      {},
+      dom("input", {
+        class: "quick-entry",
+        type: "text",
+        placeholder: "quick entry",
+        autocapitalize: "none",
+      })
+    );
     // populate form
     $fieldset?.replaceChildren(quickEntry, ...formContent);
 
@@ -169,6 +163,7 @@ export const renderNamespace = async ({
       });
     // populate tbody
     $tbody?.replaceChildren(...tbodyContent);
+    $form?.querySelector<HTMLInputElement>(autofocus)?.focus();
   };
 
   const { config } = await api.getNamespaceConfig(namespace);
@@ -177,4 +172,5 @@ export const renderNamespace = async ({
   render(config, data);
 
   $container.prepend($clone);
+  $form?.querySelector<HTMLInputElement>(autofocus)?.focus();
 };

@@ -20,14 +20,15 @@
       }
       h1 {
         text-align: center;
-        margin-bottom: 0.4em;
+        margin: 0.2em;
       }
       /* div { border: 1px solid red} */
       table {
         border-collapse: collapse;
         width: 100%;
       }
-      table td, table th {
+      table td,
+      table th {
         padding: 0.3em;
         border: 1px solid #cecece;
       }
@@ -42,7 +43,6 @@
       label {
         display: block;
         font-weight: bold;
-        margin-bottom: 0.6em;
       }
       label > * {
         display: block;
@@ -65,8 +65,11 @@
         font-size: 1em;
       }
       fieldset {
-        padding: 1em;
+        padding: 0.6em;
         margin-bottom: 1em;
+      }
+      fieldset div {
+        margin-bottom: 0.6em;
       }
       .card {
         background-color: #fff;
@@ -94,6 +97,7 @@
         position: absolute;
         right: 0;
       }
+      .ar { text-align: right;}
     </style>
   </head>
   <body>
@@ -127,7 +131,7 @@
 
         <form>
           <fieldset class="config-container"></fieldset>
-          <fieldset>
+          <fieldset class="ar">
             <button type="submit" class="button update-record">update</button>
             <button type="button" class="button sync-now">sync now</button>
           </fieldset>
@@ -144,7 +148,7 @@
         <form>
           <span class="data-lists"></span>
           <fieldset></fieldset>
-          <fieldset>
+          <fieldset class="ar">
             <button type="submit" class="button add-record">add</button>
           </fieldset>
         </form>

@@ -1,31 +1,77 @@
 "use strict";
 (() => {
-  // src/api/api.ts
-  var namespaceHome = "namespaceHomeV1";
-  var namespaceConfig = "namespaceConfigV1";
-  var API = class {
-    constructor(storage) {
-      this.storage = storage;
-    }
-    async getHomeElements() {
-      const record = (await this.getNamespaceData(namespaceHome)).pop();
-      return record?.config || [{ namespace: "$config", name: "Config" }];
-    }
-    async getNamespaceConfig(namespace) {
-      return this.getNamespaceData(namespaceConfig).then(
-        (data) => data.find((c) => c.namespace === namespace) || {
-          namespace,
-          config: []
+  // src/storage/storage.ts
+  var EmptyMessageID = "-";
+  var newMessageID = (namespace, nodeID, counter) => `${namespace}.${nodeID}.${counter}`;
+
+  // src/replication/replication.ts
+  var replicationStorageKey = "REPLICATION";
+  var defaultReplicationState = {
+    cursor: EmptyMessageID,
+    lastUpdate: 0
+  };
+  var getReplicationService = ({
+    storage,
+    replicationStorage,
+    configService,
+    onSyncStatus
+  }) => {
+    let _onSyncStatus = onSyncStatus || (() => {
+    });
+    const loadState = () => replicationStorage.get();
+    const saveState = (state) => replicationStorage.set(state);
+    const getLastUpdate = () => loadState().lastUpdate;
+    const replicate = async () => {
+      const config = configService.get();
+      const allMessages = storage.get();
+      const state = loadState();
+      const messages = storage.getAllAfter(state.cursor);
+      let cursor = state.cursor;
+      if (cursor === EmptyMessageID && allMessages.length > 0) {
+        cursor = allMessages[allMessages.length - 1].id;
+      }
+      const body = { cursor, messages };
+      console.log("REPLICATION >>>", body);
+      _onSyncStatus("SYNC");
+      return fetch(config.ReplicationURL, {
+        method: "POST",
+        cache: "no-cache",
+        headers: {
+          "Content-Type": "application/json",
+          "X-NodeID": config.NodeID,
+          Authorization: `Bearer ${config.APIKey}`
+        },
+        body: JSON.stringify(body)
+      }).then((r) => {
+        if (r.ok) {
+          return r.json();
         }
-      );
+        throw "error sync";
+      }).then((body2) => {
+        console.log("REPLICATION <<<", body2);
+        if (body2.messages) {
+          storage.append(body2.messages);
+        }
+        saveState({
+          ...loadState(),
+          lastUpdate: (/* @__PURE__ */ new Date()).getTime(),
+          ...body2.cursor !== EmptyMessageID ? { cursor: body2.cursor } : {}
+        });
+      }).catch(console.error).finally(() => {
+        _onSyncStatus("NO_SYNC");
+        if (config.AutoReplication) {
+          setTimeout(replicate, config.ReplicationInterval);
+        }
+      });
+    };
+    if (configService.get().AutoReplication) {
+      replicate();
     }
-    async getNamespaceData(namespace) {
-      const data = await this.storage.get();
-      return data.filter((m) => m.meta.ns === namespace).map((m) => m.data);
-    }
-    async add(namespace, record) {
-      this.storage.add(namespace, record);
-    }
+    return {
+      replicate,
+      getLastUpdate,
+      setOnSyncStatus: (cb) => _onSyncStatus = cb
+    };
   };
 
   // src/utils.ts
@@ -78,9 +124,8 @@
     api,
     $container
   }) => {
-    const $templateNamespace = document.getElementById(
-      "template-namespace"
-    );
+    const autofocus = ".quick-entry";
+    const $templateNamespace = document.getElementById("template-namespace");
     const $clone = $templateNamespace.content.cloneNode(true);
     const $form = $clone.querySelector("form");
     const $fieldset = $clone.querySelector("form>fieldset");
@@ -103,9 +148,7 @@
       const last = el.length > 1 ? el.pop() : null;
       const rest = el.join(" ");
       const [_skip, $f1, $f2] = Array.from(
-        $fieldset.querySelectorAll(
-          'input:not([type="datetime-local"])'
-        )
+        $fieldset.querySelectorAll('input:not([type="datetime-local"])')
       );
       $f1.value = rest;
       if (last) {
@@ -131,10 +174,7 @@
         const data2 = Object.fromEntries(formData);
         console.table(data2);
         api.add(namespace, data2).then(() => {
-          Promise.all([
-            api.getNamespaceConfig(namespace),
-            api.getNamespaceData(namespace)
-          ]).then(([namespace2, data3]) => {
+          Promise.all([api.getNamespaceConfig(namespace), api.getNamespaceData(namespace)]).then(([namespace2, data3]) => {
             const { config: config2 } = namespace2;
             render(config2, data3);
           });
@@ -160,27 +200,27 @@
         (cel) => dom(
           "div",
           {},
-          dom(
-            "label",
-            {},
-            cel.name,
-            dom("input", {
-              type: cel.type,
-              name: cel.name,
-              list: `dl-${cel.name}`,
-              value: getDefaultValue(cel.type),
-              autocapitalize: "none",
-              ...cel.required ? { required: "required" } : {}
-            })
-          )
+          dom("label", {}, cel.name),
+          dom("input", {
+            type: cel.type,
+            name: cel.name,
+            list: `dl-${cel.name}`,
+            value: getDefaultValue(cel.type),
+            autocapitalize: "none",
+            ...cel.required ? { required: "required" } : {}
+          })
         )
       );
-      const quickEntry2 = dom("input", {
-        class: "quick-entry",
-        type: "text",
-        placeholder: "quick entry",
-        autocapitalize: "none"
-      });
+      const quickEntry2 = dom(
+        "div",
+        {},
+        dom("input", {
+          class: "quick-entry",
+          type: "text",
+          placeholder: "quick entry",
+          autocapitalize: "none"
+        })
+      );
       $fieldset?.replaceChildren(quickEntry2, ...formContent);
       const theadContent = config2.map((cel) => dom("th", {}, cel.name));
       $thead?.replaceChildren(...theadContent);
@@ -191,11 +231,13 @@
         return dom("tr", {}, ...tds);
       });
       $tbody?.replaceChildren(...tbodyContent);
+      $form?.querySelector(autofocus)?.focus();
     };
     const { config } = await api.getNamespaceConfig(namespace);
     const data = await api.getNamespaceData(namespace);
     render(config, data);
     $container.prepend($clone);
+    $form?.querySelector(autofocus)?.focus();
   };
 
   // src/components/config.ts
@@ -204,9 +246,7 @@
     replicationService,
     $container
   }) => {
-    const $templateConfig = document.getElementById(
-      "template-config"
-    );
+    const $templateConfig = document.getElementById("template-config");
     const $clone = $templateConfig.content.cloneNode(true);
     const $form = $clone.querySelector("form");
     const $fieldset = $clone.querySelector("fieldset");
@@ -218,9 +258,8 @@
         card.remove();
       }
     });
-    if (!$fieldset) {
+    if (!$fieldset)
       return;
-    }
     $syncNowButton?.addEventListener("click", (e) => {
       e.preventDefault();
       replicationService.replicate().then(() => {
@@ -294,11 +333,7 @@
             ...config.AutoReplication ? { checked: "checked" } : {}
           })
         ),
-        dom(
-          "em",
-          {},
-          `Last update: ${new Date(lastUpdate).toLocaleString("sv", { timeZoneName: "short" })}`
-        )
+        dom("em", {}, `Last update: ${new Date(lastUpdate).toLocaleString("sv", { timeZoneName: "short" })}`)
       ].map((f) => dom("div", {}, f));
       $fieldset.replaceChildren(...fields);
     };
@@ -313,9 +348,7 @@
     configService,
     $container
   }) => {
-    const $templateHome = document.getElementById(
-      "template-home"
-    );
+    const $templateHome = document.getElementById("template-home");
     const $clone = $templateHome.content.cloneNode(true);
     const $homeContainer = $clone.querySelector(".home-container");
     const elements = await api.getHomeElements();
@@ -362,92 +395,18 @@
     $container.prepend($clone);
   };
 
-  // src/storage/storage.ts
-  var EmptyMessageID = "-";
-  var newMessageID = (namespace, nodeID, counter) => `${namespace}.${nodeID}.${counter}`;
-
-  // src/replication/replication.ts
-  var storageKey = "REPLICATION";
-  var getReplicationService = ({
-    storage,
-    configService,
-    onSyncStatus
-  }) => {
-    const loadState = () => {
-      return JSON.parse(localStorage.getItem(storageKey) || "null") || {
-        cursor: EmptyMessageID,
-        lastUpdate: 0
-      };
-    };
-    const saveState = (state) => {
-      localStorage.setItem(storageKey, JSON.stringify(state));
-      return state;
-    };
-    const getLastUpdate = () => loadState().lastUpdate;
-    const replicate = async () => {
-      const config = configService.get();
-      const allMessages = storage.get();
-      const state = loadState();
-      const messages = storage.getAllAfter(state.cursor);
-      let cursor = state.cursor;
-      if (cursor === EmptyMessageID && allMessages.length > 0) {
-        cursor = allMessages[allMessages.length - 1].id;
-      }
-      const body = { cursor, messages };
-      console.log("REPLICATION >>>", body);
-      onSyncStatus("SYNC");
-      return fetch(config.ReplicationURL, {
-        method: "POST",
-        cache: "no-cache",
-        headers: {
-          "Content-Type": "application/json",
-          "X-NodeID": config.ReplicationURL,
-          "Authorization": `Bearer ${config.APIKey}`
-        },
-        body: JSON.stringify(body)
-      }).then((r) => {
-        if (r.ok) {
-          return r.json();
-        }
-        throw "error sync";
-      }).then((body2) => {
-        console.log("REPLICATION <<<", body2);
-        if (body2.messages) {
-          storage.append(body2.messages);
-        }
-        saveState({
-          ...loadState(),
-          lastUpdate: (/* @__PURE__ */ new Date()).getTime(),
-          ...body2.cursor !== EmptyMessageID ? { cursor: body2.cursor } : {}
-        });
-      }).catch(console.error).finally(() => {
-        onSyncStatus("NO_SYNC");
-        if (config.AutoReplication) {
-          setTimeout(replicate, config.ReplicationInterval);
-        }
-      });
-    };
-    if (configService.get().AutoReplication) {
-      replicate();
-    }
-    return {
-      replicate,
-      getLastUpdate
-    };
-  };
-
   // src/app.ts
   var app = ({
     global,
-    storage,
-    configService
+    api,
+    configService,
+    replicationService
   }) => {
-    const $container = global.document.getElementById(
-      "container"
-    );
+    const $container = global.document.getElementById("container");
     const $syncStatusIcon = global.document.getElementById("sync-status-icon");
-    const api = new API(storage);
-    const onSyncStatus = (status) => {
+    if (!$container)
+      return;
+    replicationService.setOnSyncStatus((status) => {
       if ($syncStatusIcon) {
         if (status === "SYNC") {
           $syncStatusIcon.style.display = "inline";
@@ -455,88 +414,15 @@
           $syncStatusIcon.style.display = "none";
         }
       }
-    };
-    const replicationService = getReplicationService({ storage, configService, onSyncStatus });
+    });
     renderHome({ api, configService, $container, replicationService });
   };
 
-  // src/storage/localStorage.ts
-  var LocalStorage = class {
-    constructor(nodeID) {
-      this.storageKey = "STORAGE";
-      this.cache = null;
-      this.onlyNodeMessages = (messages) => messages.filter((m) => m.meta.node === this.nodeID);
-      this.nodeID = nodeID;
-    }
-    getAllAfter(cursor) {
-      const all = this.getState(this.storageKey).messages || [];
-      const i = all.findLastIndex((m) => m.id == cursor);
-      return i === -1 ? all : all.slice(i + 1);
-    }
-    getState(storageKey2) {
-      if (!this.cache) {
-        this.cache = JSON.parse(
-          localStorage.getItem(storageKey2) || "{}"
-        );
-      }
-      return this.cache;
-    }
-    setState(storageKey2, state) {
-      this.cache = state;
-      return localStorage.setItem(storageKey2, JSON.stringify(state));
-    }
-    add(namespace, data) {
-      const state = this.getState(this.storageKey);
-      const messageID = newMessageID(
-        namespace,
-        this.nodeID,
-        (state.messages || []).length
-      );
-      const message = {
-        id: messageID,
-        meta: {
-          node: this.nodeID,
-          ns: namespace,
-          op: "ADD",
-          messageID: EmptyMessageID,
-          ts: (/* @__PURE__ */ new Date()).getTime()
-        },
-        data
-      };
-      this.setState(this.storageKey, {
-        ...state,
-        messages: [...state.messages || [], message]
-      });
-      return messageID;
-    }
-    append(messages) {
-      const state = this.getState(this.storageKey);
-      const newMessages = [...state.messages || [], ...messages];
-      this.setState(this.storageKey, {
-        ...state,
-        messages: newMessages
-      });
-    }
-    get() {
-      return this.getState(this.storageKey).messages || [];
-    }
-  };
-
   // src/config.ts
-  var getConfigService = () => {
-    const storageKey2 = "CONFIG";
-    const getNodeID = () => `nd-${Math.ceil((/* @__PURE__ */ new Date()).getTime()).toString(36).toUpperCase()}`;
-    const loadConfig = () => {
-      const raw = localStorage.getItem(storageKey2);
-      if (raw) {
-        return JSON.parse(raw);
-      }
-      return {};
-    };
-    const save = (c) => {
-      localStorage.setItem(storageKey2, JSON.stringify(c));
-      return c;
-    };
+  var configStorageKey = "CONFIG";
+  var getNodeID = () => `nd-${Math.ceil((/* @__PURE__ */ new Date()).getTime()).toString(36).toUpperCase()}`;
+  var getConfigService = (configStorage) => {
+    const save = (c) => configStorage.set(c);
     const get = () => {
       const defaultConfig = {
         NodeID: getNodeID(),
@@ -545,12 +431,9 @@
         ReplicationInterval: 6e4,
         AutoReplication: false
       };
-      const loadedConfig = loadConfig();
+      const loadedConfig = configStorage.get();
       const config = { ...defaultConfig, ...loadedConfig };
-      if (loadedConfig != config) {
-        save(config);
-      }
-      return config;
+      return loadedConfig != config ? save(config) : config;
     };
     return {
       get,
@@ -558,11 +441,115 @@
     };
   };
 
+  // src/storage/localStorage.ts
+  var messagesStorageKey = "STORAGE";
+  var defaultMessagesState = {
+    messages: []
+  };
+  var localStorageAdapter = (storageKey, def = {}) => {
+    const get = () => JSON.parse(localStorage.getItem(storageKey) || "null") || def;
+    const set = (data) => {
+      localStorage.setItem(storageKey, JSON.stringify(data));
+      return data;
+    };
+    return {
+      get,
+      set
+    };
+  };
+  var withCache = (f) => {
+    let cache = null;
+    const get = () => cache ? cache : f.get();
+    const set = (data) => {
+      cache = null;
+      return f.set(data);
+    };
+    return {
+      get,
+      set
+    };
+  };
+  var localStorageService = (nodeID, messageStorage) => {
+    const add = (namespace, data) => {
+      const state = messageStorage.get();
+      const messageID = newMessageID(namespace, nodeID, (state.messages || []).length);
+      const message = {
+        id: messageID,
+        meta: {
+          node: nodeID,
+          ns: namespace,
+          op: "ADD",
+          messageID: EmptyMessageID,
+          ts: (/* @__PURE__ */ new Date()).getTime()
+        },
+        data
+      };
+      messageStorage.set({
+        ...state,
+        messages: [...state.messages || [], message]
+      });
+      return messageID;
+    };
+    const get = () => messageStorage.get().messages;
+    const getAllAfter = (cursor) => {
+      const all = get();
+      const i = all.findLastIndex((m) => m.id == cursor);
+      return i === -1 ? all : all.slice(i + 1);
+    };
+    const append = (messages) => {
+      const state = messageStorage.get();
+      const newMessages = [...state.messages || [], ...messages];
+      messageStorage.set({
+        ...state,
+        messages: newMessages
+      });
+    };
+    return {
+      add,
+      get,
+      getAllAfter,
+      append
+    };
+  };
+
+  // src/api/api.ts
+  var namespaceHome = "namespaceHomeV1";
+  var namespaceConfig = "namespaceConfigV1";
+  var API = class {
+    constructor(storage) {
+      this.storage = storage;
+    }
+    async getHomeElements() {
+      const record = (await this.getNamespaceData(namespaceHome)).pop();
+      return record?.config || [{ namespace: "$config", name: "Config" }];
+    }
+    async getNamespaceConfig(namespace) {
+      return this.getNamespaceData(namespaceConfig).then(
+        (data) => data.find((c) => c.namespace === namespace) || {
+          namespace,
+          config: []
+        }
+      );
+    }
+    async getNamespaceData(namespace) {
+      const data = await this.storage.get();
+      return data.filter((m) => m.meta.ns === namespace).map((m) => m.data);
+    }
+    async add(namespace, record) {
+      this.storage.add(namespace, record);
+    }
+  };
+
   // src/index.ts
   window.addEventListener("load", () => {
-    const configService = getConfigService();
+    const messagesStorage = withCache(localStorageAdapter(messagesStorageKey, defaultMessagesState));
+    const configStorage = localStorageAdapter(configStorageKey, {});
+    const replicationStorage = localStorageAdapter(replicationStorageKey, defaultReplicationState);
+    const configService = getConfigService(configStorage);
     const config = configService.get();
-    const storage = new LocalStorage(config.NodeID);
-    app({ global: window, storage, configService });
+    const storage = localStorageService(config.NodeID, messagesStorage);
+    const replicationService = getReplicationService({ storage, configService, replicationStorage });
+    const api = new API(storage);
+    app({ global: window, api, configService, replicationService });
   });
 })();

@@ -1,19 +1,23 @@
-import { IStorage } from "storage/storage";
+import { IStorageAPI } from "storage/storage";
 
 type Namespace = string;
+type HomeElement = {
+  namespace: Namespace;
+  name: string;
+};
 
 const namespaceHome: Namespace = "namespaceHomeV1";
 const namespaceConfig: Namespace = "namespaceConfigV1";
 
 export class API {
-  storage: IStorage;
+  storage: IStorageAPI;
 
-  constructor(storage: IStorage) {
-    this.storage = storage
+  constructor(storage: IStorageAPI) {
+    this.storage = storage;
   }
 
-  async getHomeElements() {
-    const record = (await this.getNamespaceData(namespaceHome)).pop()
+  async getHomeElements(): Promise<HomeElement[]> {
+    const record = (await this.getNamespaceData(namespaceHome)).pop();
     return record?.config || [{ namespace: "$config", name: "Config" }];
   }
 
@@ -26,14 +30,12 @@ export class API {
         }
     );
   }
-  async getNamespaceData(
-    namespace: Namespace
-  ): Promise<Array<Record<string, any>>> {
-    const data = await this.storage.get()
-    return data.filter(m => m.meta.ns === namespace).map(m => m.data)
+  async getNamespaceData(namespace: Namespace): Promise<Array<Record<string, any>>> {
+    const data = await this.storage.get();
+    return data.filter((m) => m.meta.ns === namespace).map((m) => m.data);
   }
 
   async add(namespace: Namespace, record: any) {
-    this.storage.add(namespace, record)
+    this.storage.add(namespace, record);
   }
 }

@@ -22,13 +22,10 @@ export type Message = {
 
 export const EmptyMessageID = "-";
 
-export const newMessageID = (
-  namespace: Namespace,
-  nodeID: NodeID,
-  counter: number
-): MessageID => `${namespace}.${nodeID}.${counter}`;
+export const newMessageID = (namespace: Namespace, nodeID: NodeID, counter: number): MessageID =>
+  `${namespace}.${nodeID}.${counter}`;
 
-export interface IStorage {
+export interface IStorageAPI {
   add(ns: Namespace, data: any): MessageID;
   get(): Message[];
   getAllAfter(cursor: MessageID): Message[];

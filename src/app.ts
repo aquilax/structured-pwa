@@ -1,33 +1,32 @@
 import { API } from "api/api";
 import { renderHome } from "components/home";
 import { ConfigService } from "config";
-import { SyncStatus, getReplicationService as getReplicationService } from "replication/replication";
-import { IStorage } from "storage/storage";
+import { ReplicationService, SyncStatus } from "replication/replication";
 
 export const app = ({
   global,
-  storage,
+  api,
   configService,
+  replicationService,
 }: {
   global: Window;
-  storage: IStorage;
+  api: API;
   configService: ConfigService;
+  replicationService: ReplicationService;
 }) => {
-  const $container = global.document.getElementById(
-    "container"
-  ) as HTMLDivElement;
-  const $syncStatusIcon = global.document.getElementById('sync-status-icon');
+  const $container = global.document.getElementById("container");
+  const $syncStatusIcon = global.document.getElementById("sync-status-icon");
 
-  const api = new API(storage);
-  const onSyncStatus = (status: SyncStatus) => {
+  if (!$container) return;
+
+  replicationService.setOnSyncStatus((status: SyncStatus) => {
     if ($syncStatusIcon) {
-      if (status === 'SYNC') {
-        $syncStatusIcon.style.display = 'inline'
+      if (status === "SYNC") {
+        $syncStatusIcon.style.display = "inline";
       } else {
-        $syncStatusIcon.style.display = 'none';
+        $syncStatusIcon.style.display = "none";
       }
     }
-  }
-  const replicationService = getReplicationService({storage, configService, onSyncStatus});
+  });
   renderHome({ api, configService, $container, replicationService });
 };

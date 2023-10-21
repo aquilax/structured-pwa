@@ -1,11 +1,14 @@
+import { StorageAdapter } from "storage/localStorage";
 import { NodeID } from "storage/storage";
 
+export const configStorageKey = "CONFIG";
+
 export interface ConfigService {
-  get(): Config;
-  save(c: Config): Config;
+  get(): ConfigState;
+  save(c: ConfigState): ConfigState;
 }
 
-export type Config = {
+export type ConfigState = {
   NodeID: NodeID;
   ReplicationURL: string;
   APIKey: string;
@@ -13,40 +16,23 @@ export type Config = {
   AutoReplication: boolean;
 };
 
-export const getConfigService = () => {
-  const storageKey = "CONFIG";
+const getNodeID = (): NodeID => `nd-${Math.ceil(new Date().getTime()).toString(36).toUpperCase()}`;
 
-  const getNodeID = (): NodeID =>
-    `nd-${Math.ceil(new Date().getTime()).toString(36).toUpperCase()}`;
-
-  const loadConfig = (): Partial<Config> => {
-    const raw = localStorage.getItem(storageKey);
-    if (raw) {
-      return JSON.parse(raw);
-    }
-    return {};
-  };
-
-  const save = (c: Config): Config => {
-    localStorage.setItem(storageKey, JSON.stringify(c));
-    return c;
-  };
-
-  const get = (): Config => {
-    const defaultConfig: Config = {
+export const getConfigService = (configStorage: StorageAdapter<ConfigState>) => {
+  const save = (c: ConfigState): ConfigState => configStorage.set(c);
+  const get = (): ConfigState => {
+    const defaultConfig: ConfigState = {
       NodeID: getNodeID(),
       ReplicationURL: "",
       APIKey: "",
       ReplicationInterval: 60000,
       AutoReplication: false,
     };
-    const loadedConfig = loadConfig();
+    const loadedConfig = configStorage.get();
     const config = { ...defaultConfig, ...loadedConfig };
-    if (loadedConfig != config) {
-      save(config);
-    }
-    return config;
+    return loadedConfig != config ? save(config) : config;
   };
+
   return {
     get,
     save,

@@ -1,14 +1,10 @@
 export const getLocaleDateTime = (d: Date): string => {
-  return (new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString()).slice(0, -5); // remove timezone, ms
-}
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, -5); // remove timezone, ms
+};
 
-export const run = <T>(cb: () => T ): T => cb()
+export const run = <T>(cb: () => T): T => cb();
 
-export const dom = (
-  tag: string,
-  attributes: Record<string, any> = {},
-  ...children: Array<string | HTMLElement>
-) => {
+export const dom = (tag: string, attributes: Record<string, any> = {}, ...children: Array<string | HTMLElement>) => {
   const element = document.createElement(tag);
   for (const attribute in attributes) {
     if (attributes.hasOwnProperty(attribute)) {
@@ -30,4 +26,4 @@ export const dom = (
     element.appendChild(fragment);
   }
   return element;
-}
+};

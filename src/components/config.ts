@@ -1,4 +1,4 @@
-import { Config, ConfigService } from "config";
+import { ConfigState, ConfigService } from "config";
 import { ReplicationService } from "replication/replication";
 import { dom } from "utils";
 
@@ -11,9 +11,7 @@ export const renderConfig = ({
   replicationService: ReplicationService;
   $container: HTMLElement;
 }) => {
-  const $templateConfig = document.getElementById(
-    "template-config"
-  ) as HTMLTemplateElement;
+  const $templateConfig = document.getElementById("template-config") as HTMLTemplateElement;
   const $clone = $templateConfig.content.cloneNode(true) as HTMLElement;
   const $form = $clone.querySelector<HTMLFormElement>("form");
   const $fieldset = $clone.querySelector<HTMLFieldSetElement>("fieldset");
@@ -27,14 +25,12 @@ export const renderConfig = ({
     }
   });
 
-  if (!$fieldset) {
-    return;
-  }
+  if (!$fieldset) return;
 
   $syncNowButton?.addEventListener("click", (e) => {
     e.preventDefault();
     replicationService.replicate().then(() => {
-      render(configService.get(), replicationService.getLastUpdate())
+      render(configService.get(), replicationService.getLastUpdate());
     });
   });
 
@@ -48,13 +44,12 @@ export const renderConfig = ({
       ReplicationURL: data.ReplicationURL.toString(),
       APIKey: data.APIKey.toString(),
       ReplicationInterval: parseInt(data.ReplicationInterval.toString(), 10),
-      AutoReplication:
-        (data.AutoReplication || "false") === "true" ? true : false,
+      AutoReplication: (data.AutoReplication || "false") === "true" ? true : false,
     });
     render(config, replicationService.getLastUpdate());
   });
 
-  const render = (config: Config, lastUpdate: number) => {
+  const render = (config: ConfigState, lastUpdate: number) => {
     const fields = [
       dom(
         "label",
@@ -111,11 +106,7 @@ export const renderConfig = ({
           ...(config.AutoReplication ? { checked: "checked" } : {}),
         })
       ),
-      dom(
-        "em",
-        {},
-        `Last update: ${new Date(lastUpdate).toLocaleString("sv", { timeZoneName: "short" })}`
-      ),
+      dom("em", {}, `Last update: ${new Date(lastUpdate).toLocaleString("sv", { timeZoneName: "short" })}`),
     ].map((f) => dom("div", {}, f));
     $fieldset.replaceChildren(...fields);
   };
