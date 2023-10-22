@@ -1,4 +1,17 @@
-import { IStorageAPI } from "storage/storage";
+import { StorageAdapter } from "storage/localStorage";
+import { EmptyMessageID, Message, MessageID, NodeID, newMessageID } from "storage/storage";
+
+export const messagesStorageKey = "STORAGE";
+
+
+export type MessagesState = {
+  messages: Message[];
+};
+
+export const defaultMessagesState = {
+  messages: [],
+};
+
 
 type Namespace = string;
 type HomeElement = {
@@ -9,33 +22,81 @@ type HomeElement = {
 const namespaceHome: Namespace = "namespaceHomeV1";
 const namespaceConfig: Namespace = "namespaceConfigV1";
 
-export class API {
-  storage: IStorageAPI;
+export interface ApiService {
+  getHomeElements(): Promise<HomeElement[]>;
+  getNamespaceConfig(namespace: Namespace): Promise<Record<string, any>>;
+  getNamespaceData(namespace: Namespace): Promise<Array<Record<string, any>>>;
+  add(namespace: Namespace, data: any): MessageID;
+  getAllAfter(cursor: MessageID): Message[];
+  append(messages: Message[]): MessagesState;
+  getAllMessages(): Message[];
+}
 
-  constructor(storage: IStorageAPI) {
-    this.storage = storage;
-  }
+export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<MessagesState>) => {
+  const add = (namespace: Namespace, data: any): MessageID => {
+    const state = messageStorage.get();
+    const messageID = newMessageID(namespace, nodeID, (state.messages || []).length);
+    const message: Message = {
+      id: messageID,
+      meta: {
+        node: nodeID,
+        ns: namespace,
+        op: "ADD",
+        messageID: EmptyMessageID,
+        ts: new Date().getTime(),
+      },
+      data: data,
+    };
+    messageStorage.set({
+      ...state,
+      messages: [...(state.messages || []), message],
+    });
+    return messageID;
+  };
 
-  async getHomeElements(): Promise<HomeElement[]> {
-    const record = (await this.getNamespaceData(namespaceHome)).pop();
+  const getAllMessages = (): Message[] => messageStorage.get().messages;
+
+  const getAllAfter = (cursor: MessageID): Message[] => {
+    const all = getAllMessages();
+    const i = all.findLastIndex((m) => m.id == cursor);
+    return i === -1 ? all : all.slice(i + 1);
+  };
+
+  const append = (messages: Message[]): MessagesState => {
+    const state = messageStorage.get();
+    const newMessages = [...(state.messages || []), ...messages];
+    return messageStorage.set({
+      ...state,
+      messages: newMessages,
+    });
+  };
+
+  const getHomeElements = async (): Promise<HomeElement[]> => {
+    const record = (await getNamespaceData(namespaceHome)).pop();
     return record?.config || [{ namespace: "$config", name: "Config" }];
-  }
+  };
 
-  async getNamespaceConfig(namespace: Namespace) {
-    return this.getNamespaceData(namespaceConfig).then(
+  const getNamespaceConfig = async (namespace: Namespace) => {
+    return getNamespaceData(namespaceConfig).then(
       (data) =>
         data.find((c) => c.namespace === namespace) || {
           namespace: namespace,
           config: [],
         }
     );
-  }
-  async getNamespaceData(namespace: Namespace): Promise<Array<Record<string, any>>> {
-    const data = await this.storage.get();
+  };
+  const getNamespaceData = async (namespace: Namespace): Promise<Array<Record<string, any>>> => {
+    const data = await getAllMessages();
     return data.filter((m) => m.meta.ns === namespace).map((m) => m.data);
-  }
+  };
 
-  async add(namespace: Namespace, record: any) {
-    this.storage.add(namespace, record);
-  }
-}
+  return {
+    getHomeElements,
+    getNamespaceConfig,
+    getNamespaceData,
+    add,
+    getAllMessages,
+    getAllAfter,
+    append,
+  };
+};

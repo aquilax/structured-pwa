@@ -7,14 +7,10 @@ import {
 import { app } from "./app";
 import { ConfigState, configStorageKey, getConfigService } from "config";
 import {
-  MessagesState,
-  defaultMessagesState,
   localStorageAdapter,
-  localStorageService,
-  messagesStorageKey,
   withCache,
 } from "storage/localStorage";
-import { API } from "api/api";
+import { MessagesState, apiService, defaultMessagesState, messagesStorageKey } from "api/api";
 
 window.addEventListener("load", () => {
   const messagesStorage = withCache(localStorageAdapter<MessagesState>(messagesStorageKey, defaultMessagesState));
@@ -24,10 +20,9 @@ window.addEventListener("load", () => {
   const configService = getConfigService(configStorage);
   const config = configService.get();
 
-  const storage = localStorageService(config.NodeID, messagesStorage);
-  const replicationService = getReplicationService({ storage, configService, replicationStorage });
+  const api = apiService(config.NodeID, messagesStorage);
+  const replicationService = getReplicationService({ api, configService, replicationStorage });
 
-  const api = new API(storage);
 
   app({ global: window, api, configService, replicationService });
 });

@@ -1,15 +1,4 @@
-import { Message, NodeID, IStorageAPI, newMessageID, EmptyMessageID, Namespace, MessageID } from "./storage";
-
-export const messagesStorageKey = "STORAGE";
-
 export type StorageKey = string;
-export type MessagesState = {
-  messages: Message[];
-};
-
-export const defaultMessagesState = {
-  messages: [],
-};
 
 export interface StorageAdapter<T> {
   get(): T;
@@ -44,48 +33,3 @@ export const withCache = <T>(f: StorageAdapter<T>) => {
   };
 };
 
-export const localStorageService = (nodeID: NodeID, messageStorage: StorageAdapter<MessagesState>): IStorageAPI => {
-  const add = (namespace: Namespace, data: any): MessageID => {
-    const state = messageStorage.get();
-    const messageID = newMessageID(namespace, nodeID, (state.messages || []).length);
-    const message: Message = {
-      id: messageID,
-      meta: {
-        node: nodeID,
-        ns: namespace,
-        op: "ADD",
-        messageID: EmptyMessageID,
-        ts: new Date().getTime(),
-      },
-      data: data,
-    };
-    messageStorage.set({
-      ...state,
-      messages: [...(state.messages || []), message],
-    });
-    return messageID;
-  };
-
-  const get = (): Message[] => messageStorage.get().messages;
-
-  const getAllAfter = (cursor: MessageID): Message[] => {
-    const all = get();
-    const i = all.findLastIndex((m) => m.id == cursor);
-    return i === -1 ? all : all.slice(i + 1);
-  };
-  const append = (messages: Message[]): void => {
-    const state = messageStorage.get();
-    const newMessages = [...(state.messages || []), ...messages];
-    messageStorage.set({
-      ...state,
-      messages: newMessages,
-    });
-  };
-
-  return {
-    add,
-    get,
-    getAllAfter,
-    append,
-  };
-};

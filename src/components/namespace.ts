@@ -1,4 +1,4 @@
-import { API } from "api/api";
+import { ApiService } from "api/api";
 import { Namespace } from "storage/storage";
 import { dom, getLocaleDateTime, run } from "utils";
 
@@ -25,12 +25,14 @@ export const renderNamespace = async ({
   namespace,
   api,
   $container,
+  id = new Date().getTime().toString()
 }: {
   namespace: Namespace;
-  api: API;
+  api: ApiService;
   $container: HTMLElement;
+  id: string
 }) => {
-  const autofocus = ".quick-entry";
+  const autofocus = `.quick-entry`;
   const $templateNamespace = document.getElementById("template-namespace") as HTMLTemplateElement;
 
   const $clone = $templateNamespace.content.cloneNode(true) as HTMLElement;
@@ -87,12 +89,11 @@ export const renderNamespace = async ({
       const formData = new FormData($form);
       const data = Object.fromEntries(formData);
       console.table(data);
-      api.add(namespace, data).then(() => {
-        // repopulate table
-        Promise.all([api.getNamespaceConfig(namespace), api.getNamespaceData(namespace)]).then(([namespace, data]) => {
-          const { config } = namespace;
-          render(config, data);
-        });
+      api.add(namespace, data);
+      // repopulate table
+      Promise.all([api.getNamespaceConfig(namespace), api.getNamespaceData(namespace)]).then(([namespace, data]) => {
+        const { config } = namespace;
+        render(config, data);
       });
     }
   });
@@ -101,6 +102,23 @@ export const renderNamespace = async ({
     Array.from(new Set(data.filter((i) => i).map((i) => i[name].trim())));
 
   const render = (config: any[], data: any[]) => {
+    const quickEntryFields = config.filter((c) => !["datetime-local"].includes(c.type)).map((c) => c.name);
+
+    const quickEntryDataList = dom(
+      "datalist",
+      {
+        id: `dl-quick-entry-${id}`,
+      },
+      ...data
+        .map((row) =>
+          quickEntryFields
+            .map((name) => row[name])
+            .filter((v) => v)
+            .join(" ")
+        )
+        .map((o) => dom("option", {}, o))
+    );
+
     const dataLists = config
       .filter((c) => ["text", "string"].includes(c.type))
       .map((c) => ({
@@ -112,22 +130,23 @@ export const renderNamespace = async ({
         dom(
           "datalist",
           {
-            id: `dl-${dl.name}`,
+            id: `dl-${dl.name}-${id}`,
           },
           ...dl.options.map((o) => dom("option", {}, o))
         )
       );
-    $dataLists?.replaceChildren(...dataLists);
+    $dataLists?.replaceChildren(quickEntryDataList, ...dataLists);
 
     const formContent = config.map((cel) =>
       dom(
         "div",
         {},
-        dom("label", {}, cel.name),
+        dom("label", {for: `cel-name-${id}`}, cel.name),
         dom("input", {
+          id: `cel-name-${id}`,
           type: cel.type,
           name: cel.name,
-          list: `dl-${cel.name}`,
+          list: `dl-${cel.name}-${id}`,
           value: getDefaultValue(cel.type),
           autocapitalize: "none",
           ...(cel.required ? { required: "required" } : {}),
@@ -139,6 +158,7 @@ export const renderNamespace = async ({
       {},
       dom("input", {
         class: "quick-entry",
+        list: `dl-quick-entry-${id}`,
         type: "text",
         placeholder: "quick entry",
         autocapitalize: "none",

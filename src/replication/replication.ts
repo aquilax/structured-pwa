@@ -1,3 +1,4 @@
+import { ApiService } from "api/api";
 import { ConfigService } from "config";
 import { StorageAdapter } from "storage/localStorage";
 import { EmptyMessageID, IStorageAPI, MessageID } from "storage/storage";
@@ -30,12 +31,12 @@ export const defaultReplicationState = {
 export type OnSyncStatus = (status: SyncStatus) => void;
 
 export const getReplicationService = ({
-  storage,
+  api,
   replicationStorage,
   configService,
   onSyncStatus,
 }: {
-  storage: IStorageAPI;
+  api: ApiService;
   replicationStorage: StorageAdapter<ReplicationState>;
   configService: ConfigService;
   onSyncStatus?: OnSyncStatus;
@@ -50,9 +51,9 @@ export const getReplicationService = ({
 
   const replicate = async () => {
     const config = configService.get();
-    const allMessages = storage.get();
+    const allMessages = api.getAllMessages();
     const state = loadState();
-    const messages = storage.getAllAfter(state.cursor);
+    const messages = api.getAllAfter(state.cursor);
 
     let cursor = state.cursor;
     if (cursor === EmptyMessageID && allMessages.length > 0) {
@@ -82,7 +83,7 @@ export const getReplicationService = ({
         console.log("REPLICATION <<<", body);
         if (body.messages) {
           // store new messages
-          storage.append(body.messages);
+          api.append(body.messages);
         }
         saveState({
           ...loadState(),

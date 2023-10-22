@@ -11,7 +11,7 @@
     lastUpdate: 0
   };
   var getReplicationService = ({
-    storage,
+    api,
     replicationStorage,
     configService,
     onSyncStatus
@@ -23,9 +23,9 @@
     const getLastUpdate = () => loadState().lastUpdate;
     const replicate = async () => {
       const config = configService.get();
-      const allMessages = storage.get();
+      const allMessages = api.getAllMessages();
       const state = loadState();
-      const messages = storage.getAllAfter(state.cursor);
+      const messages = api.getAllAfter(state.cursor);
       let cursor = state.cursor;
       if (cursor === EmptyMessageID && allMessages.length > 0) {
         cursor = allMessages[allMessages.length - 1].id;
@@ -50,7 +50,7 @@
       }).then((body2) => {
         console.log("REPLICATION <<<", body2);
         if (body2.messages) {
-          storage.append(body2.messages);
+          api.append(body2.messages);
         }
         saveState({
           ...loadState(),
@@ -122,9 +122,10 @@
   var renderNamespace = async ({
     namespace,
     api,
-    $container
+    $container,
+    id = (/* @__PURE__ */ new Date()).getTime().toString()
   }) => {
-    const autofocus = ".quick-entry";
+    const autofocus = `.quick-entry`;
     const $templateNamespace = document.getElementById("template-namespace");
     const $clone = $templateNamespace.content.cloneNode(true);
     const $form = $clone.querySelector("form");
@@ -173,16 +174,25 @@
         const formData = new FormData($form);
         const data2 = Object.fromEntries(formData);
         console.table(data2);
-        api.add(namespace, data2).then(() => {
-          Promise.all([api.getNamespaceConfig(namespace), api.getNamespaceData(namespace)]).then(([namespace2, data3]) => {
-            const { config: config2 } = namespace2;
-            render(config2, data3);
-          });
+        api.add(namespace, data2);
+        Promise.all([api.getNamespaceConfig(namespace), api.getNamespaceData(namespace)]).then(([namespace2, data3]) => {
+          const { config: config2 } = namespace2;
+          render(config2, data3);
         });
       }
     });
     const getDataListOptions = (name, data2) => Array.from(new Set(data2.filter((i) => i).map((i) => i[name].trim())));
     const render = (config2, data2) => {
+      const quickEntryFields = config2.filter((c) => !["datetime-local"].includes(c.type)).map((c) => c.name);
+      const quickEntryDataList = dom(
+        "datalist",
+        {
+          id: `dl-quick-entry-${id}`
+        },
+        ...data2.map(
+          (row) => quickEntryFields.map((name) => row[name]).filter((v) => v).join(" ")
+        ).map((o) => dom("option", {}, o))
+      );
       const dataLists = config2.filter((c) => ["text", "string"].includes(c.type)).map((c) => ({
         name: c.name,
         options: getDataListOptions(c.name, data2)
@@ -190,21 +200,22 @@
         (dl) => dom(
           "datalist",
           {
-            id: `dl-${dl.name}`
+            id: `dl-${dl.name}-${id}`
           },
           ...dl.options.map((o) => dom("option", {}, o))
         )
       );
-      $dataLists?.replaceChildren(...dataLists);
+      $dataLists?.replaceChildren(quickEntryDataList, ...dataLists);
       const formContent = config2.map(
         (cel) => dom(
           "div",
           {},
-          dom("label", {}, cel.name),
+          dom("label", { for: `cel-name-${id}` }, cel.name),
           dom("input", {
+            id: `cel-name-${id}`,
             type: cel.type,
             name: cel.name,
-            list: `dl-${cel.name}`,
+            list: `dl-${cel.name}-${id}`,
             value: getDefaultValue(cel.type),
             autocapitalize: "none",
             ...cel.required ? { required: "required" } : {}
@@ -216,6 +227,7 @@
         {},
         dom("input", {
           class: "quick-entry",
+          list: `dl-quick-entry-${id}`,
           type: "text",
           placeholder: "quick entry",
           autocapitalize: "none"
@@ -442,10 +454,6 @@
   };
 
   // src/storage/localStorage.ts
-  var messagesStorageKey = "STORAGE";
-  var defaultMessagesState = {
-    messages: []
-  };
   var localStorageAdapter = (storageKey, def = {}) => {
     const get = () => JSON.parse(localStorage.getItem(storageKey) || "null") || def;
     const set = (data) => {
@@ -469,7 +477,15 @@
       set
     };
   };
-  var localStorageService = (nodeID, messageStorage) => {
+
+  // src/api/api.ts
+  var messagesStorageKey = "STORAGE";
+  var defaultMessagesState = {
+    messages: []
+  };
+  var namespaceHome = "namespaceHomeV1";
+  var namespaceConfig = "namespaceConfigV1";
+  var apiService = (nodeID, messageStorage) => {
     const add = (namespace, data) => {
       const state = messageStorage.get();
       const messageID = newMessageID(namespace, nodeID, (state.messages || []).length);
@@ -490,54 +506,45 @@
       });
       return messageID;
     };
-    const get = () => messageStorage.get().messages;
+    const getAllMessages = () => messageStorage.get().messages;
     const getAllAfter = (cursor) => {
-      const all = get();
+      const all = getAllMessages();
       const i = all.findLastIndex((m) => m.id == cursor);
       return i === -1 ? all : all.slice(i + 1);
     };
     const append = (messages) => {
       const state = messageStorage.get();
       const newMessages = [...state.messages || [], ...messages];
-      messageStorage.set({
+      return messageStorage.set({
         ...state,
         messages: newMessages
       });
     };
-    return {
-      add,
-      get,
-      getAllAfter,
-      append
-    };
-  };
-
-  // src/api/api.ts
-  var namespaceHome = "namespaceHomeV1";
-  var namespaceConfig = "namespaceConfigV1";
-  var API = class {
-    constructor(storage) {
-      this.storage = storage;
-    }
-    async getHomeElements() {
-      const record = (await this.getNamespaceData(namespaceHome)).pop();
+    const getHomeElements = async () => {
+      const record = (await getNamespaceData(namespaceHome)).pop();
       return record?.config || [{ namespace: "$config", name: "Config" }];
-    }
-    async getNamespaceConfig(namespace) {
-      return this.getNamespaceData(namespaceConfig).then(
+    };
+    const getNamespaceConfig = async (namespace) => {
+      return getNamespaceData(namespaceConfig).then(
         (data) => data.find((c) => c.namespace === namespace) || {
           namespace,
           config: []
         }
       );
-    }
-    async getNamespaceData(namespace) {
-      const data = await this.storage.get();
+    };
+    const getNamespaceData = async (namespace) => {
+      const data = await getAllMessages();
       return data.filter((m) => m.meta.ns === namespace).map((m) => m.data);
-    }
-    async add(namespace, record) {
-      this.storage.add(namespace, record);
-    }
+    };
+    return {
+      getHomeElements,
+      getNamespaceConfig,
+      getNamespaceData,
+      add,
+      getAllMessages,
+      getAllAfter,
+      append
+    };
   };
 
   // src/index.ts
@@ -547,9 +554,8 @@
     const replicationStorage = localStorageAdapter(replicationStorageKey, defaultReplicationState);
     const configService = getConfigService(configStorage);
     const config = configService.get();
-    const storage = localStorageService(config.NodeID, messagesStorage);
-    const replicationService = getReplicationService({ storage, configService, replicationStorage });
-    const api = new API(storage);
+    const api = apiService(config.NodeID, messagesStorage);
+    const replicationService = getReplicationService({ api, configService, replicationStorage });
     app({ global: window, api, configService, replicationService });
   });
 })();
