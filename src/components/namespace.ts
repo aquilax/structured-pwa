@@ -25,12 +25,12 @@ export const renderNamespace = async ({
   namespace,
   api,
   $container,
-  id = new Date().getTime().toString()
+  id = new Date().getTime().toString(),
 }: {
   namespace: Namespace;
   api: ApiService;
   $container: HTMLElement;
-  id: string
+  id: string;
 }) => {
   const autofocus = `.quick-entry`;
   const $templateNamespace = document.getElementById("template-namespace") as HTMLTemplateElement;
@@ -109,14 +109,16 @@ export const renderNamespace = async ({
       {
         id: `dl-quick-entry-${id}`,
       },
-      ...data
-        .map((row) =>
-          quickEntryFields
-            .map((name) => row[name])
-            .filter((v) => v)
-            .join(" ")
+      ...Array.from(
+        new Set(
+          data.map((row) =>
+            quickEntryFields
+              .map((name) => row[name])
+              .filter((v) => v)
+              .join(" ")
+          )
         )
-        .map((o) => dom("option", {}, o))
+      ).map((o) => dom("option", {}, o))
     );
 
     const dataLists = config
@@ -141,7 +143,7 @@ export const renderNamespace = async ({
       dom(
         "div",
         {},
-        dom("label", {for: `cel-name-${id}`}, cel.name),
+        dom("label", { for: `cel-name-${id}` }, cel.name),
         dom("input", {
           id: `cel-name-${id}`,
           type: cel.type,

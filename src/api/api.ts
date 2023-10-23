@@ -64,7 +64,8 @@ export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<Messag
 
   const append = (messages: Message[]): MessagesState => {
     const state = messageStorage.get();
-    const newMessages = [...(state.messages || []), ...messages];
+    const ids = state.messages.map(m => m.id);
+    const newMessages = [...(state.messages || []), ...messages.filter(m => !ids.includes(m.id))];
     return messageStorage.set({
       ...state,
       messages: newMessages,

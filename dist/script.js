@@ -189,8 +189,12 @@
         {
           id: `dl-quick-entry-${id}`
         },
-        ...data2.map(
-          (row) => quickEntryFields.map((name) => row[name]).filter((v) => v).join(" ")
+        ...Array.from(
+          new Set(
+            data2.map(
+              (row) => quickEntryFields.map((name) => row[name]).filter((v) => v).join(" ")
+            )
+          )
         ).map((o) => dom("option", {}, o))
       );
       const dataLists = config2.filter((c) => ["text", "string"].includes(c.type)).map((c) => ({
@@ -514,7 +518,8 @@
     };
     const append = (messages) => {
       const state = messageStorage.get();
-      const newMessages = [...state.messages || [], ...messages];
+      const ids = state.messages.map((m) => m.id);
+      const newMessages = [...state.messages || [], ...messages.filter((m) => !ids.includes(m.id))];
       return messageStorage.set({
         ...state,
         messages: newMessages
