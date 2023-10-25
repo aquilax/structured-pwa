@@ -111,7 +111,7 @@ export const renderNamespace = async ({
       },
       ...Array.from(
         new Set(
-          data.map((row) =>
+          data.reverse().map((row) =>
             quickEntryFields
               .map((name) => row[name])
               .filter((v) => v)

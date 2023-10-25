@@ -191,7 +191,7 @@
         },
         ...Array.from(
           new Set(
-            data2.map(
+            data2.reverse().map(
               (row) => quickEntryFields.map((name) => row[name]).filter((v) => v).join(" ")
             )
           )
