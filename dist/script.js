@@ -240,11 +240,15 @@
       $fieldset?.replaceChildren(quickEntry2, ...formContent);
       const theadContent = config2.map((cel) => dom("th", {}, cel.name));
       $thead?.replaceChildren(...theadContent);
+      const today = (/* @__PURE__ */ new Date()).toISOString().substring(0, 10);
       const tbodyContent = data2.sort((r1, r2) => r1.ts.localeCompare(r2.ts)).reverse().slice(0, 30).map((row) => {
         const tds = config2.map((c) => {
           return dom("td", {}, `${formatValue(c.type, row[c.name])}`);
         });
-        return dom("tr", {}, ...tds);
+        const isToday = row.ts && row.ts.toString().substr(0, 10) === today;
+        return dom("tr", {
+          ...isToday ? {} : { class: "older" }
+        }, ...tds);
       });
       $tbody?.replaceChildren(...tbodyContent);
       $form?.querySelector(autofocus)?.focus();

@@ -173,6 +173,8 @@ export const renderNamespace = async ({
     // populate thead
     $thead?.replaceChildren(...theadContent);
 
+    const today = new Date().toISOString().substring(0, 10)
+
     const tbodyContent = data
       .sort((r1, r2) => r1.ts.localeCompare(r2.ts))
       .reverse()
@@ -181,7 +183,10 @@ export const renderNamespace = async ({
         const tds = config.map((c) => {
           return dom("td", {}, `${formatValue(c.type, row[c.name])}`);
         });
-        return dom("tr", {}, ...tds);
+        const isToday = row.ts && row.ts.toString().substr(0, 10) === today
+        return dom("tr", {
+          ...(isToday ? {} : {class: 'older'})
+        }, ...tds);
       });
     // populate tbody
     $tbody?.replaceChildren(...tbodyContent);
