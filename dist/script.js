@@ -189,6 +189,18 @@
         });
       }
     });
+    $tbody?.addEventListener("click", (e) => {
+      if (e.target && e.target.tagName === "TD") {
+        const textContent = e.target.textContent;
+        Array.from($tbody.getElementsByTagName("td")).forEach(($td) => {
+          if ($td.textContent === textContent) {
+            $td.classList.add("highlight");
+          } else {
+            $td.classList.remove("highlight");
+          }
+        });
+      }
+    });
     const getDataListOptions = (name, data2) => Array.from(new Set(data2.filter((i) => i).map((i) => i[name].trim())));
     const render = (config2, data2) => {
       const quickEntryFields = config2.filter((c) => !["datetime-local"].includes(c.type)).map((c) => c.name);
@@ -247,9 +259,10 @@
       );
       $fieldset?.replaceChildren(quickEntry2, ...formContent);
       const theadContent = config2.map((cel) => dom("th", {}, cel.name));
-      $thead?.replaceChildren(...theadContent);
+      $thead?.replaceChildren(dom("th", {}, ""), ...theadContent);
       const today = (/* @__PURE__ */ new Date()).toISOString().substring(0, 10);
-      const tbodyContent = data2.sort((r1, r2) => r1.ts.localeCompare(r2.ts)).reverse().slice(0, 30).map((row) => {
+      const checkbox = (n) => dom("td", {}, dom("input", { type: "checkbox" }), ` ${n.toString().padStart(2, "0")}`);
+      const tbodyContent = data2.sort((r1, r2) => r1.ts.localeCompare(r2.ts)).reverse().slice(0, 30).map((row, index) => {
         const tds = config2.map((c) => {
           return dom("td", {}, `${formatValue(c.type, row[c.name])}`);
         });
@@ -259,6 +272,7 @@
           {
             ...isToday ? {} : { class: "older" }
           },
+          checkbox(index + 1),
           ...tds
         );
       });

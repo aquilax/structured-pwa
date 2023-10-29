@@ -107,6 +107,18 @@ export const renderNamespace = async ({
       });
     }
   });
+  $tbody?.addEventListener("click", (e) => {
+    if (e.target && (e.target as HTMLElement).tagName === 'TD') {
+      const textContent = (e.target as HTMLElement).textContent;
+      Array.from($tbody.getElementsByTagName('td')).forEach($td => {
+        if ($td.textContent === textContent) {
+          $td.classList.add('highlight');
+        } else {
+          $td.classList.remove('highlight');
+        }
+      })
+    }
+  })
 
   const getDataListOptions = (name: string, data: any[]) =>
     Array.from(new Set(data.filter((i) => i).map((i) => i[name].trim())));
@@ -181,15 +193,16 @@ export const renderNamespace = async ({
 
     const theadContent = config.map((cel) => dom("th", {}, cel.name));
     // populate thead
-    $thead?.replaceChildren(...theadContent);
+    $thead?.replaceChildren(dom("th", {}, ''), ...theadContent);
 
     const today = new Date().toISOString().substring(0, 10);
+    const checkbox = (n:number) => dom("td", {}, dom("input", {type: "checkbox"}), ` ${n.toString().padStart(2, '0')}`)
 
     const tbodyContent = data
       .sort((r1, r2) => r1.ts.localeCompare(r2.ts))
       .reverse()
       .slice(0, 30)
-      .map((row) => {
+      .map((row, index) => {
         const tds = config.map((c) => {
           return dom("td", {}, `${formatValue(c.type, row[c.name])}`);
         });
@@ -199,7 +212,7 @@ export const renderNamespace = async ({
           {
             ...(isToday ? {} : { class: "older" }),
           },
-          ...tds
+          checkbox(index+1), ...tds
         );
       });
     // populate tbody
