@@ -156,17 +156,25 @@
         $f2.value = last;
       }
     };
+    const close = () => {
+      const card = $closeButton?.closest(".card");
+      if (card) {
+        card.remove();
+      }
+    };
     $fieldset.addEventListener("input", (e) => {
       const target = e.target;
       if (target && target.classList.contains("quick-entry")) {
         quickEntry(target.value);
       }
     });
-    $closeButton?.addEventListener("click", (e) => {
-      const card = $closeButton?.closest(".card");
-      if (card) {
-        card.remove();
+    $fieldset.addEventListener("keyup", (e) => {
+      if (e.key === "Escape") {
+        close();
       }
+    });
+    $closeButton?.addEventListener("click", (e) => {
+      close();
     });
     $form?.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -246,9 +254,13 @@
           return dom("td", {}, `${formatValue(c.type, row[c.name])}`);
         });
         const isToday = row.ts && row.ts.toString().substr(0, 10) === today;
-        return dom("tr", {
-          ...isToday ? {} : { class: "older" }
-        }, ...tds);
+        return dom(
+          "tr",
+          {
+            ...isToday ? {} : { class: "older" }
+          },
+          ...tds
+        );
       });
       $tbody?.replaceChildren(...tbodyContent);
       $form?.querySelector(autofocus)?.focus();

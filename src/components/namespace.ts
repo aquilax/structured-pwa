@@ -68,6 +68,13 @@ export const renderNamespace = async ({
     }
   };
 
+  const close = () => {
+    const card = $closeButton?.closest(".card");
+    if (card) {
+      card.remove(); // TODO: proper cleanup
+    }
+  }
+
   $fieldset.addEventListener("input", (e) => {
     const target = e.target as HTMLInputElement;
     if (target && target.classList.contains("quick-entry")) {
@@ -75,11 +82,14 @@ export const renderNamespace = async ({
     }
   });
 
-  $closeButton?.addEventListener("click", (e) => {
-    const card = $closeButton?.closest(".card");
-    if (card) {
-      card.remove(); // TODO: proper cleanup
+  $fieldset.addEventListener("keyup", (e) => {
+    if (e.key === "Escape") {
+      close();
     }
+  });
+
+  $closeButton?.addEventListener("click", (e) => {
+    close();
   });
 
   $form?.addEventListener("submit", (e) => {
@@ -173,7 +183,7 @@ export const renderNamespace = async ({
     // populate thead
     $thead?.replaceChildren(...theadContent);
 
-    const today = new Date().toISOString().substring(0, 10)
+    const today = new Date().toISOString().substring(0, 10);
 
     const tbodyContent = data
       .sort((r1, r2) => r1.ts.localeCompare(r2.ts))
@@ -183,10 +193,14 @@ export const renderNamespace = async ({
         const tds = config.map((c) => {
           return dom("td", {}, `${formatValue(c.type, row[c.name])}`);
         });
-        const isToday = row.ts && row.ts.toString().substr(0, 10) === today
-        return dom("tr", {
-          ...(isToday ? {} : {class: 'older'})
-        }, ...tds);
+        const isToday = row.ts && row.ts.toString().substr(0, 10) === today;
+        return dom(
+          "tr",
+          {
+            ...(isToday ? {} : { class: "older" }),
+          },
+          ...tds
+        );
       });
     // populate tbody
     $tbody?.replaceChildren(...tbodyContent);
