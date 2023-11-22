@@ -4,7 +4,45 @@
   var EmptyMessageID = "-";
   var newMessageID = (namespace, nodeID, counter) => `${namespace}.${nodeID}.${counter}`;
 
+  // src/utils.ts
+  var getLocaleDateTime = (d) => {
+    return new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, -5);
+  };
+  var run = (cb) => cb();
+  var dom = (tag, attributes = {}, ...children) => {
+    const element = document.createElement(tag);
+    for (const attribute in attributes) {
+      if (attributes.hasOwnProperty(attribute)) {
+        element.setAttribute(attribute, attributes[attribute]);
+      }
+    }
+    if (children) {
+      const fragment = run(() => {
+        const fragment2 = document.createDocumentFragment();
+        children.forEach((child) => {
+          if (typeof child === "string") {
+            fragment2.appendChild(document.createTextNode(child));
+          } else {
+            fragment2.appendChild(child);
+          }
+        });
+        return fragment2;
+      });
+      element.appendChild(fragment);
+    }
+    return element;
+  };
+  var debounce = (cb, wait) => {
+    let h;
+    const callable = (...args) => {
+      clearTimeout(h);
+      h = setTimeout(() => cb(...args), wait);
+    };
+    return callable;
+  };
+
   // src/replication/replication.ts
+  var debounceTimeout = 6e4;
   var replicationStorageKey = "REPLICATION";
   var defaultReplicationState = {
     cursor: EmptyMessageID,
@@ -66,41 +104,14 @@
     };
     if (configService.get().AutoReplication) {
       replicate();
+    } else {
+      api.subscribe("add", debounce(() => replicate(), debounceTimeout));
     }
     return {
       replicate,
       getLastUpdate,
       setOnSyncStatus: (cb) => _onSyncStatus = cb
     };
-  };
-
-  // src/utils.ts
-  var getLocaleDateTime = (d) => {
-    return new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, -5);
-  };
-  var run = (cb) => cb();
-  var dom = (tag, attributes = {}, ...children) => {
-    const element = document.createElement(tag);
-    for (const attribute in attributes) {
-      if (attributes.hasOwnProperty(attribute)) {
-        element.setAttribute(attribute, attributes[attribute]);
-      }
-    }
-    if (children) {
-      const fragment = run(() => {
-        const fragment2 = document.createDocumentFragment();
-        children.forEach((child) => {
-          if (typeof child === "string") {
-            fragment2.appendChild(document.createTextNode(child));
-          } else {
-            fragment2.appendChild(child);
-          }
-        });
-        return fragment2;
-      });
-      element.appendChild(fragment);
-    }
-    return element;
   };
 
   // src/components/namespace.ts
@@ -520,6 +531,9 @@
   var namespaceHome = "namespaceHomeV1";
   var namespaceConfig = "namespaceConfigV1";
   var apiService = (nodeID, messageStorage) => {
+    const subscriptions = [];
+    const trigger = (hook, ...args) => subscriptions.forEach((s) => s.hook == hook && s.cb(...args));
+    const subscribe = (hook, cb) => subscriptions.push({ hook, cb });
     const add = (namespace, data) => {
       const state = messageStorage.get();
       const messageID = newMessageID(namespace, nodeID, (state.messages || []).length);
@@ -538,6 +552,7 @@
         ...state,
         messages: [...state.messages || [], message]
       });
+      trigger("add");
       return messageID;
     };
     const getAllMessages = () => messageStorage.get().messages;
@@ -578,7 +593,8 @@
       add,
       getAllMessages,
       getAllAfter,
-      append
+      append,
+      subscribe
     };
   };
 

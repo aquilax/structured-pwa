@@ -19,6 +19,9 @@ type HomeElement = {
   name: string;
 };
 
+export type Hook = 'add';
+export type Callback = (...args: any) => void;
+
 const namespaceHome: Namespace = "namespaceHomeV1";
 const namespaceConfig: Namespace = "namespaceConfigV1";
 
@@ -30,9 +33,16 @@ export interface ApiService {
   getAllAfter(cursor: MessageID): Message[];
   append(messages: Message[]): MessagesState;
   getAllMessages(): Message[];
+  subscribe(hook: Hook, cb: Callback): number;
 }
 
 export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<MessagesState>) => {
+
+  const subscriptions: Array<{hook:Hook, cb: Callback}> = []
+
+  const trigger = (hook: Hook, ...args: any) => subscriptions.forEach(s => s.hook == hook && s.cb(...args) )
+  const subscribe = (hook: Hook, cb: Callback) => subscriptions.push({hook, cb})
+
   const add = (namespace: Namespace, data: any): MessageID => {
     const state = messageStorage.get();
     const messageID = newMessageID(namespace, nodeID, (state.messages || []).length);
@@ -51,6 +61,7 @@ export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<Messag
       ...state,
       messages: [...(state.messages || []), message],
     });
+    trigger('add')
     return messageID;
   };
 
@@ -86,6 +97,7 @@ export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<Messag
         }
     );
   };
+
   const getNamespaceData = async (namespace: Namespace): Promise<Array<Record<string, any>>> => {
     const data = await getAllMessages();
     return data.filter((m) => m.meta.ns === namespace).map((m) => m.data);
@@ -99,5 +111,6 @@ export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<Messag
     getAllMessages,
     getAllAfter,
     append,
+    subscribe,
   };
 };

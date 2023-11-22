@@ -2,7 +2,9 @@ import { ApiService } from "api/api";
 import { ConfigService } from "config";
 import { StorageAdapter } from "storage/localStorage";
 import { EmptyMessageID, IStorageAPI, MessageID } from "storage/storage";
+import { debounce } from "utils";
 
+const debounceTimeout = 60000;
 export const replicationStorageKey = "REPLICATION";
 
 export type ReplicationState = {
@@ -101,6 +103,8 @@ export const getReplicationService = ({
   };
   if (configService.get().AutoReplication) {
     replicate();
+  } else {
+    api.subscribe("add", debounce(() => replicate(), debounceTimeout))
   }
   return {
     replicate,

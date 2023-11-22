@@ -27,3 +27,12 @@ export const dom = (tag: string, attributes: Record<string, any> = {}, ...childr
   }
   return element;
 };
+
+export const debounce = <F extends (...args: any) => any>(cb: F, wait: number): F => {
+  let h: any
+  const callable = (...args: any) => {
+    clearTimeout(h)
+    h = setTimeout(() => cb(...args), wait);
+  }
+  return <F>(callable);
+}
