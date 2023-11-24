@@ -1,4 +1,4 @@
-export type Hook = "add" | "connection" | "replicationStart" | "replicationStop";
+export type Hook = "add" | "connectionOnline" | "connectionOffline" | "replicationStart" | "replicationStop" | "checkConnection";
 export type Callback = (...args: any) => void;
 
 export interface PubSubService {

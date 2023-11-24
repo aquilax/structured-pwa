@@ -5,15 +5,21 @@ export interface ConnectionService {
 }
 
 export const getConnectionService = ({ pubSubService }: { pubSubService: PubSubService }) => {
+  const isOnline = () => navigator.onLine
+
+  pubSubService.on("checkConnection", () => {
+    pubSubService.emit(isOnline() ? "connectionOnline" : "connectionOffline")
+  })
+
   window.addEventListener("offline", (e) => {
-    pubSubService.emit("connection", "offline");
+    pubSubService.emit("connectionOffline");
   });
 
   window.addEventListener("online", (e) => {
-    pubSubService.emit("connection", "online");
+    pubSubService.emit("connectionOnline");
   });
 
   return {
-    isOnline: () => navigator.onLine
+    isOnline
   }
 };

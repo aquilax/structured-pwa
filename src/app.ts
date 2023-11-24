@@ -19,16 +19,27 @@ export const app = ({
 }) => {
   const $container = global.document.getElementById("container");
   const $syncStatusIcon = global.document.getElementById("sync-status-icon");
+  const $onlineStatusIcon = global.document.getElementById("online-status-icon");
 
   if (!$container) return;
+
+  if ($onlineStatusIcon) {
+    pubSubService.on("connectionOnline", () => {
+      $onlineStatusIcon.style.display = "inline";
+    });
+    pubSubService.on("connectionOffline", () => {
+      $onlineStatusIcon.style.display = "none";
+    });
+    pubSubService.emit("checkConnection");
+  }
 
   if ($syncStatusIcon) {
     pubSubService.on("replicationStart", () => {
       $syncStatusIcon.style.display = "inline";
-    })
+    });
     pubSubService.on("replicationStop", () => {
       $syncStatusIcon.style.display = "none";
-    })
+    });
   }
   renderHome({ api, configService, $container, replicationService });
 };

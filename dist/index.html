@@ -92,7 +92,7 @@
         display: flex;
         justify-content: space-between;
       }
-      #sync-status-icon {
+      #status {
         font-size: 2em;
         position: absolute;
         right: 0;
@@ -110,7 +110,10 @@
   </head>
   <body>
     <div class="wrapper">
-      <span id="sync-status-icon" style="display: none">🔃</span>
+      <div id="status">
+        <span id="sync-status-icon" style="display: none">🔃</span>
+        <span id="online-status-icon" style="display: none">🛜</span>
+      </div>
       <h1>Structured data</h1>
       <div id="container"></div>
     </div>

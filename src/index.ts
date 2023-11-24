@@ -27,6 +27,5 @@ window.addEventListener("load", () => {
   const api = apiService(config.NodeID, messagesStorage, pubSubService);
   const replicationService = getReplicationService({ api, configService, replicationStorage, connectionService, pubSubService});
 
-
   app({ global: window, api, configService, replicationService, pubSubService });
 });
