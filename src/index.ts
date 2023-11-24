@@ -11,8 +11,12 @@ import {
   withCache,
 } from "storage/localStorage";
 import { MessagesState, apiService, defaultMessagesState, messagesStorageKey } from "api/api";
+import { getPubSubService } from "pubsub";
+import { getConnectionService } from "connection";
 
 window.addEventListener("load", () => {
+  const pubSubService = getPubSubService();
+  const connectionService = getConnectionService({pubSubService});
   const messagesStorage = withCache(localStorageAdapter<MessagesState>(messagesStorageKey, defaultMessagesState));
   const configStorage = localStorageAdapter<ConfigState>(configStorageKey, {});
   const replicationStorage = localStorageAdapter<ReplicationState>(replicationStorageKey, defaultReplicationState);
@@ -20,9 +24,9 @@ window.addEventListener("load", () => {
   const configService = getConfigService(configStorage);
   const config = configService.get();
 
-  const api = apiService(config.NodeID, messagesStorage);
-  const replicationService = getReplicationService({ api, configService, replicationStorage });
+  const api = apiService(config.NodeID, messagesStorage, pubSubService);
+  const replicationService = getReplicationService({ api, configService, replicationStorage, connectionService, pubSubService});
 
 
-  app({ global: window, api, configService, replicationService });
+  app({ global: window, api, configService, replicationService, pubSubService });
 });

@@ -1,5 +1,7 @@
 import { ApiService } from "api/api";
 import { ConfigService } from "config";
+import { ConnectionService } from "connection";
+import { PubSubService } from "pubsub";
 import { StorageAdapter } from "storage/localStorage";
 import { EmptyMessageID, IStorageAPI, MessageID } from "storage/storage";
 import { debounce } from "utils";
@@ -17,7 +19,6 @@ export type SyncStatus = "SYNC" | "NO_SYNC";
 export interface ReplicationService {
   replicate(): Promise<void>;
   getLastUpdate(): number;
-  setOnSyncStatus(cb: OnSyncStatus): void;
 }
 
 export type ReplicationConfig = {
@@ -36,15 +37,15 @@ export const getReplicationService = ({
   api,
   replicationStorage,
   configService,
-  onSyncStatus,
+  connectionService,
+  pubSubService,
 }: {
   api: ApiService;
   replicationStorage: StorageAdapter<ReplicationState>;
   configService: ConfigService;
-  onSyncStatus?: OnSyncStatus;
+  connectionService: ConnectionService;
+  pubSubService: PubSubService;
 }) => {
-  let _onSyncStatus = onSyncStatus || (() => {});
-
   const loadState = () => replicationStorage.get();
 
   const saveState = (state: ReplicationState) => replicationStorage.set(state);
@@ -52,6 +53,10 @@ export const getReplicationService = ({
   const getLastUpdate = () => loadState().lastUpdate;
 
   const replicate = async () => {
+    if (!connectionService.isOnline) {
+      return Promise.reject("offline");
+    }
+
     const config = configService.get();
     const allMessages = api.getAllMessages();
     const state = loadState();
@@ -63,8 +68,8 @@ export const getReplicationService = ({
     }
 
     const body = { cursor, messages };
+    pubSubService.emit("replicationStart", true)
     console.log("REPLICATION >>>", body);
-    _onSyncStatus("SYNC");
     return fetch(config.ReplicationURL, {
       method: "POST",
       cache: "no-cache",
@@ -95,7 +100,7 @@ export const getReplicationService = ({
       })
       .catch(console.error)
       .finally(() => {
-        _onSyncStatus("NO_SYNC");
+        pubSubService.emit("replicationStop", true)
         if (config.AutoReplication) {
           setTimeout(replicate, config.ReplicationInterval);
         }
@@ -104,11 +109,10 @@ export const getReplicationService = ({
   if (configService.get().AutoReplication) {
     replicate();
   } else {
-    api.subscribe("add", debounce(() => replicate(), debounceTimeout))
+    pubSubService.on("add", debounce(() => replicate(), debounceTimeout))
   }
   return {
     replicate,
     getLastUpdate,
-    setOnSyncStatus: (cb: OnSyncStatus) => (_onSyncStatus = cb),
   };
 };

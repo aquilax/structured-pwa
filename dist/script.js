@@ -52,14 +52,16 @@
     api,
     replicationStorage,
     configService,
-    onSyncStatus
+    connectionService,
+    pubSubService
   }) => {
-    let _onSyncStatus = onSyncStatus || (() => {
-    });
     const loadState = () => replicationStorage.get();
     const saveState = (state) => replicationStorage.set(state);
     const getLastUpdate = () => loadState().lastUpdate;
     const replicate = async () => {
+      if (!connectionService.isOnline) {
+        return Promise.reject("offline");
+      }
       const config = configService.get();
       const allMessages = api.getAllMessages();
       const state = loadState();
@@ -69,8 +71,8 @@
         cursor = allMessages[allMessages.length - 1].id;
       }
       const body = { cursor, messages };
+      pubSubService.emit("replicationStart", true);
       console.log("REPLICATION >>>", body);
-      _onSyncStatus("SYNC");
       return fetch(config.ReplicationURL, {
         method: "POST",
         cache: "no-cache",
@@ -96,7 +98,7 @@
           ...body2.cursor !== EmptyMessageID ? { cursor: body2.cursor } : {}
         });
       }).catch(console.error).finally(() => {
-        _onSyncStatus("NO_SYNC");
+        pubSubService.emit("replicationStop", true);
         if (config.AutoReplication) {
           setTimeout(replicate, config.ReplicationInterval);
         }
@@ -105,12 +107,11 @@
     if (configService.get().AutoReplication) {
       replicate();
     } else {
-      api.subscribe("add", debounce(() => replicate(), debounceTimeout));
+      pubSubService.on("add", debounce(() => replicate(), debounceTimeout));
     }
     return {
       replicate,
-      getLastUpdate,
-      setOnSyncStatus: (cb) => _onSyncStatus = cb
+      getLastUpdate
     };
   };
 
@@ -457,21 +458,21 @@
     global,
     api,
     configService,
-    replicationService
+    replicationService,
+    pubSubService
   }) => {
     const $container = global.document.getElementById("container");
     const $syncStatusIcon = global.document.getElementById("sync-status-icon");
     if (!$container)
       return;
-    replicationService.setOnSyncStatus((status) => {
-      if ($syncStatusIcon) {
-        if (status === "SYNC") {
-          $syncStatusIcon.style.display = "inline";
-        } else {
-          $syncStatusIcon.style.display = "none";
-        }
-      }
-    });
+    if ($syncStatusIcon) {
+      pubSubService.on("replicationStart", () => {
+        $syncStatusIcon.style.display = "inline";
+      });
+      pubSubService.on("replicationStop", () => {
+        $syncStatusIcon.style.display = "none";
+      });
+    }
     renderHome({ api, configService, $container, replicationService });
   };
 
@@ -530,10 +531,7 @@
   };
   var namespaceHome = "namespaceHomeV1";
   var namespaceConfig = "namespaceConfigV1";
-  var apiService = (nodeID, messageStorage) => {
-    const subscriptions = [];
-    const trigger = (hook, ...args) => subscriptions.forEach((s) => s.hook == hook && s.cb(...args));
-    const subscribe = (hook, cb) => subscriptions.push({ hook, cb });
+  var apiService = (nodeID, messageStorage, pubSubService) => {
     const add = (namespace, data) => {
       const state = messageStorage.get();
       const messageID = newMessageID(namespace, nodeID, (state.messages || []).length);
@@ -552,7 +550,7 @@
         ...state,
         messages: [...state.messages || [], message]
       });
-      trigger("add");
+      pubSubService.emit("add");
       return messageID;
     };
     const getAllMessages = () => messageStorage.get().messages;
@@ -593,20 +591,49 @@
       add,
       getAllMessages,
       getAllAfter,
-      append,
-      subscribe
+      append
+    };
+  };
+
+  // src/pubsub.ts
+  var getPubSubService = () => {
+    let subscriptions = [];
+    const emit = (hook, ...args) => subscriptions.forEach((s) => s.hook == hook && s.cb(...args));
+    const on = (hook, cb) => subscriptions.push({ hook, cb });
+    const off = (hook, cb) => {
+      subscriptions = subscriptions.filter((s) => s.hook === hook && s.cb === cb);
+    };
+    return {
+      on,
+      off,
+      emit
+    };
+  };
+
+  // src/connection.ts
+  var getConnectionService = ({ pubSubService }) => {
+    window.addEventListener("offline", (e) => {
+      pubSubService.emit("connection", "offline");
+    });
+    window.addEventListener("online", (e) => {
+      pubSubService.emit("connection", "online");
+    });
+    return {
+      isOnline: () => navigator.onLine
     };
   };
 
   // src/index.ts
   window.addEventListener("load", () => {
+    const pubSubService = getPubSubService();
+    const connectionService = getConnectionService({ pubSubService });
     const messagesStorage = withCache(localStorageAdapter(messagesStorageKey, defaultMessagesState));
     const configStorage = localStorageAdapter(configStorageKey, {});
     const replicationStorage = localStorageAdapter(replicationStorageKey, defaultReplicationState);
     const configService = getConfigService(configStorage);
     const config = configService.get();
-    const api = apiService(config.NodeID, messagesStorage);
-    const replicationService = getReplicationService({ api, configService, replicationStorage });
-    app({ global: window, api, configService, replicationService });
+    const api = apiService(config.NodeID, messagesStorage, pubSubService);
+    const replicationService = getReplicationService({ api, configService, replicationStorage, connectionService, pubSubService });
+    app({ global: window, api, configService, replicationService, pubSubService });
   });
 })();
