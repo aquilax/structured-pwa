@@ -1,4 +1,4 @@
-import { API } from "api/api";
+import { ApiService } from "api/api";
 import { renderHome } from "components/home";
 import { ConfigService } from "config";
 import { PubSubService } from "pubsub";
@@ -12,7 +12,7 @@ export const app = ({
   pubSubService,
 }: {
   global: Window;
-  api: API;
+  api: ApiService;
   configService: ConfigService;
   replicationService: ReplicationService;
   pubSubService: PubSubService;

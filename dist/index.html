@@ -106,13 +106,14 @@
       .highlight {
         text-shadow: 0px 0px 1px black;
       }
+      #form-raw textarea { width:100%; height: 5rem }
     </style>
   </head>
   <body>
     <div class="wrapper">
       <div id="status">
         <span id="sync-status-icon" style="display: none">🔃</span>
-        <span id="online-status-icon" style="display: none">🛜</span>
+        <span id="online-status-icon" style="display: none">💡</span>
       </div>
       <h1>Structured data</h1>
       <div id="container"></div>
@@ -147,6 +148,20 @@
             <button type="button" class="button sync-now">sync now</button>
           </fieldset>
         </form>
+        <details>
+          <summary>Raw</summary>
+          <form id="form-raw">
+            <fieldset class="config-container">
+              <label>Namespace
+                <input type="text" name="namespace" required/>
+              </label>
+              <textarea id="raw-message" name="rawMessage" required></textarea>
+            </fieldset>
+            <fieldset class="ar">
+              <button type="submit" class="button add-raw">add</button>
+            </fieldset>
+          </form>
+        </details>
       </div>
     </template>
 

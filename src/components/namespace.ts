@@ -22,15 +22,17 @@ const formatValue = (type: FieldType, value: any) => {
 };
 
 export const renderNamespace = async ({
+  name,
   namespace,
   api,
   $container,
   id = new Date().getTime().toString(),
 }: {
+  name: string;
   namespace: Namespace;
   api: ApiService;
   $container: HTMLElement;
-  id: string;
+  id?: string;
 }) => {
   const autofocus = `.quick-entry`;
   const $templateNamespace = document.getElementById("template-namespace") as HTMLTemplateElement;
@@ -46,8 +48,9 @@ export const renderNamespace = async ({
   const $closeButton = $clone.querySelector<HTMLHeadElement>(".close-card");
 
   if ($heading) {
-    $heading.innerText = namespace;
+    $heading.innerText = name;
   }
+
   if (!$fieldset) {
     return;
   }
