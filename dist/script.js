@@ -132,6 +132,7 @@
     return value;
   };
   var renderNamespace = async ({
+    name,
     namespace,
     api,
     $container,
@@ -148,7 +149,7 @@
     const $dataLists = $clone.querySelector(".data-lists");
     const $closeButton = $clone.querySelector(".close-card");
     if ($heading) {
-      $heading.innerText = namespace;
+      $heading.innerText = name;
     }
     if (!$fieldset) {
       return;
@@ -213,7 +214,7 @@
         });
       }
     });
-    const getDataListOptions = (name, data2) => Array.from(new Set(data2.filter((i) => i).map((i) => i[name].trim())));
+    const getDataListOptions = (name2, data2) => Array.from(new Set(data2.filter((i) => i).map((i) => i[name2].trim())));
     const render = (config2, data2) => {
       const quickEntryFields = config2.filter((c) => !["datetime-local"].includes(c.type)).map((c) => c.name);
       const quickEntryDataList = dom(
@@ -224,7 +225,7 @@
         ...Array.from(
           new Set(
             data2.reverse().map(
-              (row) => quickEntryFields.map((name) => row[name]).filter((v) => v).join(" ")
+              (row) => quickEntryFields.map((name2) => row[name2]).filter((v) => v).join(" ")
             )
           )
         ).map((o) => dom("option", {}, o))
@@ -301,12 +302,14 @@
   // src/components/config.ts
   var renderConfig = ({
     configService,
+    api,
     replicationService,
     $container
   }) => {
     const $templateConfig = document.getElementById("template-config");
     const $clone = $templateConfig.content.cloneNode(true);
     const $form = $clone.querySelector("form");
+    const $formRaw = $clone.querySelector("#form-raw");
     const $fieldset = $clone.querySelector("fieldset");
     const $closeButton = $clone.querySelector(".close-card");
     const $syncNowButton = $clone.querySelector(".sync-now");
@@ -337,6 +340,17 @@
         AutoReplication: (data.AutoReplication || "false") === "true" ? true : false
       });
       render(config, replicationService.getLastUpdate());
+    });
+    $formRaw?.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const formData = new FormData($formRaw);
+      const data = Object.fromEntries(formData);
+      console.table(data);
+      const { namespace, rawMessage } = data;
+      const message = JSON.parse(rawMessage.toString());
+      if (api && namespace && message) {
+        api.add(namespace.toString(), message);
+      }
     });
     const render = (config, lastUpdate) => {
       const fields = [
@@ -417,15 +431,18 @@
       if (target.matches(".button.home")) {
         e.preventDefault();
         const namespace = target.dataset["namespace"];
+        const name = target.dataset["name"];
         if (namespace) {
           if (namespace === "$config") {
             renderConfig({
               configService,
+              api,
               replicationService,
               $container
             });
           } else {
             renderNamespace({
+              name,
               namespace,
               api,
               $container
@@ -442,6 +459,7 @@
             "button",
             {
               ["data-namespace"]: el.namespace,
+              ["data-name"]: el.name,
               class: "button home"
             },
             el.name

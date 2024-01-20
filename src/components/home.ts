@@ -1,6 +1,6 @@
 import { dom, run } from "utils";
 import { renderNamespace } from "./namespace";
-import { API } from "api/api";
+import { ApiService } from "api/api";
 import { renderConfig } from "./config";
 import { ConfigService } from "config";
 import { ReplicationService } from "replication/replication";
@@ -11,7 +11,7 @@ export const renderHome = async ({
   configService,
   $container,
 }: {
-  api: API;
+  api: ApiService;
   replicationService: ReplicationService;
   configService: ConfigService;
   $container: HTMLElement;
@@ -30,17 +30,20 @@ export const renderHome = async ({
       // button on home page
       e.preventDefault();
       const namespace = target.dataset["namespace"];
+      const name = target.dataset["name"];
       if (namespace) {
         if (namespace === "$config") {
           renderConfig({
             configService,
+            api,
             replicationService,
             $container: $container,
           });
         } else {
           renderNamespace({
+            name,
             namespace,
-            api: api,
+            api,
             $container: $container,
           });
         }
@@ -56,6 +59,7 @@ export const renderHome = async ({
           "button",
           {
             ["data-namespace"]: el.namespace,
+            ["data-name"]: el.name,
             class: "button home",
           },
           el.name
