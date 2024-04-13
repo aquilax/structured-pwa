@@ -55,16 +55,26 @@ export const renderNamespace = async ({
     return;
   }
 
-  const quickEntry = (value: string) => {
+  const onQuickEntry = (value: string) => {
     if (!value) {
       return;
     }
-    const el = value.split(" ");
-    const last = el.length > 1 ? el.pop() : null;
-    const rest = el.join(" ");
-    const [_skip, $f1, $f2] = Array.from(
+    const fields = Array.from(
       $fieldset.querySelectorAll<HTMLInputElement>('input:not([type="datetime-local"])')
     );
+    const [_skip, $f1, $f2, $f3] = fields;
+    const el = value.split(" ");
+    if (fields.length > 3 && el.length > 2) {
+      // handle 3 element field
+      $f3.value = el.pop() || '';
+      $f2.value = el.pop() || '';
+      $f1.value = el.join(" ")
+      return
+    }
+
+    const last = el.length > 1 ? el.pop() : null;
+    const rest = el.join(" ");
+
     $f1.value = rest;
     if (last) {
       $f2.value = last;
@@ -81,7 +91,7 @@ export const renderNamespace = async ({
   $fieldset.addEventListener("input", (e) => {
     const target = e.target as HTMLInputElement;
     if (target && target.classList.contains("quick-entry")) {
-      quickEntry(target.value);
+      onQuickEntry(target.value);
     }
   });
 
