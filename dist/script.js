@@ -154,16 +154,23 @@
     if (!$fieldset) {
       return;
     }
-    const quickEntry = (value) => {
+    const onQuickEntry = (value) => {
       if (!value) {
         return;
       }
-      const el = value.split(" ");
-      const last = el.length > 1 ? el.pop() : null;
-      const rest = el.join(" ");
-      const [_skip, $f1, $f2] = Array.from(
+      const fields = Array.from(
         $fieldset.querySelectorAll('input:not([type="datetime-local"])')
       );
+      const [_skip, $f1, $f2, $f3] = fields;
+      const el = value.split(" ");
+      if (fields.length > 3 && el.length > 2) {
+        $f3.value = el.pop() || "";
+        $f2.value = el.pop() || "";
+        $f1.value = el.join(" ");
+        return;
+      }
+      const last = el.length > 1 ? el.pop() : null;
+      const rest = el.join(" ");
       $f1.value = rest;
       if (last) {
         $f2.value = last;
@@ -178,7 +185,7 @@
     $fieldset.addEventListener("input", (e) => {
       const target = e.target;
       if (target && target.classList.contains("quick-entry")) {
-        quickEntry(target.value);
+        onQuickEntry(target.value);
       }
     });
     $fieldset.addEventListener("keyup", (e) => {
@@ -259,7 +266,7 @@
           })
         )
       );
-      const quickEntry2 = dom(
+      const quickEntry = dom(
         "div",
         {},
         dom("input", {
@@ -270,7 +277,7 @@
           autocapitalize: "none"
         })
       );
-      $fieldset?.replaceChildren(quickEntry2, ...formContent);
+      $fieldset?.replaceChildren(quickEntry, ...formContent);
       const theadContent = config2.map((cel) => dom("th", {}, cel.name));
       $thead?.replaceChildren(dom("th", {}, ""), ...theadContent);
       const today = (/* @__PURE__ */ new Date()).toISOString().substring(0, 10);
