@@ -94,6 +94,14 @@ export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<Messag
     return data.filter((m) => m.meta.ns === namespace).map((m) => m.data);
   };
 
+  const remove = async (id: MessageID): Promise<void> => {
+    const state = messageStorage.get();
+    messageStorage.set({
+      ...state,
+      messages: state.messages.filter((m) => m.id !== id)
+    })
+  };
+
   return {
     getHomeElements,
     getNamespaceConfig,
@@ -102,5 +110,6 @@ export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<Messag
     getAllMessages,
     getAllAfter,
     append,
+    remove,
   };
 };

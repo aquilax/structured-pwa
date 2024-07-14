@@ -3,7 +3,7 @@ import { ConfigService } from "config";
 import { ConnectionService } from "connection";
 import { PubSubService } from "pubsub";
 import { StorageAdapter } from "storage/localStorage";
-import { EmptyMessageID, IStorageAPI, MessageID } from "storage/storage";
+import { EmptyMessageID, MessageID } from "storage/storage";
 import { debounce } from "utils";
 
 const debounceTimeout = 60000;

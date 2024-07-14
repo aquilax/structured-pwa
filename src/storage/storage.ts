@@ -30,4 +30,5 @@ export interface IStorageAPI {
   get(): Message[];
   getAllAfter(cursor: MessageID): Message[];
   append(messages: Message[]): void;
+  remove(id: MessageID): void;
 }

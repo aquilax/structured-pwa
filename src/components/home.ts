@@ -31,7 +31,7 @@ export const renderHome = async ({
       e.preventDefault();
       const namespace = target.dataset["namespace"];
       const name = target.dataset["name"];
-      if (namespace) {
+      if (namespace && name) {
         if (namespace === "$config") {
           renderConfig({
             configService,

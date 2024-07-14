@@ -439,7 +439,7 @@
         e.preventDefault();
         const namespace = target.dataset["namespace"];
         const name = target.dataset["name"];
-        if (namespace) {
+        if (namespace && name) {
           if (namespace === "$config") {
             renderConfig({
               configService,
@@ -619,6 +619,13 @@
       const data = await getAllMessages();
       return data.filter((m) => m.meta.ns === namespace).map((m) => m.data);
     };
+    const remove = async (id) => {
+      const state = messageStorage.get();
+      messageStorage.set({
+        ...state,
+        messages: state.messages.filter((m) => m.id !== id)
+      });
+    };
     return {
       getHomeElements,
       getNamespaceConfig,
@@ -626,7 +633,8 @@
       add,
       getAllMessages,
       getAllAfter,
-      append
+      append,
+      remove
     };
   };
 
