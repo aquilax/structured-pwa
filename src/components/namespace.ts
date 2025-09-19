@@ -36,9 +36,7 @@ export const renderNamespace = async ({
 }) => {
   const autofocus = `.quick-entry`;
   const $templateNamespace = document.getElementById("template-namespace") as HTMLTemplateElement;
-
-  const $clone = $templateNamespace.content.cloneNode(true) as HTMLElement;
-
+  const $clone = document.importNode($templateNamespace.content, true);
   const $form = $clone.querySelector<HTMLFormElement>("form");
   const $fieldset = $clone.querySelector<HTMLElement>("form>fieldset");
   const $thead = $clone.querySelector<HTMLElement>("thead");
@@ -183,13 +181,14 @@ export const renderNamespace = async ({
           id: `cel-name-${id}`,
           type: cel.type,
           name: cel.name,
-          list: `dl-${cel.name}-${id}`,
+          ...(cel.type != 'datetime-local' ? {list: `dl-${cel.name}-${id}`} : {}),
           value: getDefaultValue(cel.type),
           autocapitalize: "none",
           ...(cel.required ? { required: "required" } : {}),
         })
       )
     );
+
     const quickEntry = dom(
       "div",
       {},

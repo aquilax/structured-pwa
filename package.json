@@ -19,7 +19,7 @@
   "homepage": "https://github.com/aquilax/structured-pwa#readme",
   "devDependencies": {
     "esbuild": "0.19.4",
-    "workbox-cli": "^7.0.0"
+    "workbox-cli": "^7.3.0"
   },
   "prettier": {
     "printWidth": 120

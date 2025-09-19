@@ -15,7 +15,7 @@ export const renderConfig = ({
   $container: HTMLElement;
 }) => {
   const $templateConfig = document.getElementById("template-config") as HTMLTemplateElement;
-  const $clone = $templateConfig.content.cloneNode(true) as HTMLElement;
+  const $clone = document.importNode($templateConfig.content, true);
   const $form = $clone.querySelector<HTMLFormElement>("form");
   const $formRaw = $clone.querySelector<HTMLFormElement>("#form-raw");
   const $fieldset = $clone.querySelector<HTMLFieldSetElement>("fieldset");

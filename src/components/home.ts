@@ -17,7 +17,7 @@ export const renderHome = async ({
   $container: HTMLElement;
 }) => {
   const $templateHome = document.getElementById("template-home") as HTMLTemplateElement;
-  const $clone = $templateHome.content.cloneNode(true) as HTMLElement;
+  const $clone = document.importNode($templateHome.content, true);
   const $homeContainer = $clone.querySelector<HTMLDivElement>(".home-container");
 
   const elements = await api.getHomeElements();

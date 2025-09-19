@@ -140,7 +140,7 @@
   }) => {
     const autofocus = `.quick-entry`;
     const $templateNamespace = document.getElementById("template-namespace");
-    const $clone = $templateNamespace.content.cloneNode(true);
+    const $clone = document.importNode($templateNamespace.content, true);
     const $form = $clone.querySelector("form");
     const $fieldset = $clone.querySelector("form>fieldset");
     const $thead = $clone.querySelector("thead");
@@ -259,7 +259,7 @@
             id: `cel-name-${id}`,
             type: cel.type,
             name: cel.name,
-            list: `dl-${cel.name}-${id}`,
+            ...cel.type != "datetime-local" ? { list: `dl-${cel.name}-${id}` } : {},
             value: getDefaultValue(cel.type),
             autocapitalize: "none",
             ...cel.required ? { required: "required" } : {}
@@ -314,7 +314,7 @@
     $container
   }) => {
     const $templateConfig = document.getElementById("template-config");
-    const $clone = $templateConfig.content.cloneNode(true);
+    const $clone = document.importNode($templateConfig.content, true);
     const $form = $clone.querySelector("form");
     const $formRaw = $clone.querySelector("#form-raw");
     const $fieldset = $clone.querySelector("fieldset");
@@ -428,7 +428,7 @@
     $container
   }) => {
     const $templateHome = document.getElementById("template-home");
-    const $clone = $templateHome.content.cloneNode(true);
+    const $clone = document.importNode($templateHome.content, true);
     const $homeContainer = $clone.querySelector(".home-container");
     const elements = await api.getHomeElements();
     $homeContainer?.addEventListener("click", (e) => {
