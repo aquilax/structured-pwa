@@ -156,5 +156,6 @@ export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<Messag
     getAllAfter,
     append,
     remove,
+    compactStorage,
   };
 };
