@@ -20,6 +20,8 @@ export const renderConfig = ({
   const $formRaw = $clone.querySelector<HTMLFormElement>("#form-raw");
   const $fieldset = $clone.querySelector<HTMLFieldSetElement>("fieldset");
   const $closeButton = $clone.querySelector<HTMLHeadElement>(".close-card");
+  const $compactButton = $clone.querySelector<HTMLButtonElement>(".compact-storage");
+  const $compactStatus = $clone.querySelector<HTMLSpanElement>(".compact-status");
   const $syncNowButton = $clone.querySelector<HTMLHeadElement>(".sync-now");
 
   $closeButton?.addEventListener("click", (e) => {
@@ -30,6 +32,14 @@ export const renderConfig = ({
   });
 
   if (!$fieldset) return;
+
+  $compactButton?.addEventListener("click", (e) => {
+    e.preventDefault();
+    const { removed, total } = api.compactStorage();
+    if ($compactStatus) {
+      $compactStatus.textContent = `Compaction complete. ${removed} duplicate old message${removed === 1 ? "" : "s"} removed. ${total} messages stored.`;
+    }
+  });
 
   $syncNowButton?.addEventListener("click", (e) => {
     e.preventDefault();
