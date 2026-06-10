@@ -1,6 +1,6 @@
 import { PubSubService } from "pubsub";
 import { StorageAdapter } from "storage/localStorage";
-import { EmptyMessageID, Message, MessageID, NodeID, newMessageID } from "storage/storage";
+import { EmptyMessageID, Message, MessageData, MessageID, NodeID, newMessageID } from "storage/storage";
 
 export const messagesStorageKey = "STORAGE";
 
@@ -31,6 +31,7 @@ export interface ApiService {
   getAllAfter(cursor: MessageID): Message[];
   append(messages: Message[]): MessagesState;
   getAllMessages(): Message[];
+  compactStorage(): { removed: number; total: number };
 }
 
 export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<MessagesState>, pubSubService: PubSubService) => {
@@ -56,7 +57,51 @@ export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<Messag
     return messageID;
   };
 
+  const normalizeMessageData = (data: MessageData): any => {
+    const {ts, ...rest} = data || {};
+    return rest;
+  };
+
+  const getCompactKey = (message: Message): string =>
+    JSON.stringify([
+      message.meta.ns,
+      message.meta.op,
+      normalizeMessageData(message.data),
+    ]);
+
   const getAllMessages = (): Message[] => messageStorage.get().messages;
+
+  const compactStorage = (): { removed: number; total: number } => {
+    const state = messageStorage.get();
+    const messages = state.messages || [];
+    const cutoff = Date.now() - 1000 * 60 * 60 * 24 * 14;
+    const olderMessages = messages.filter((m) => m.meta.ts < cutoff);
+    const newerMessages = messages.filter((m) => m.meta.ts >= cutoff);
+    const compacted = new Map<string, Message>();
+
+    [...olderMessages]
+      .sort((a, b) => b.meta.ts - a.meta.ts)
+      .forEach((message) => {
+        const key = getCompactKey(message);
+        if (!compacted.has(key)) {
+          compacted.set(key, message);
+        }
+      });
+
+    const compactedMessages = [...newerMessages, ...compacted.values()].sort(
+      (a, b) => a.meta.ts - b.meta.ts
+    );
+
+    messageStorage.set({
+      ...state,
+      messages: compactedMessages,
+    });
+
+    return {
+      removed: messages.length - compactedMessages.length,
+      total: compactedMessages.length,
+    };
+  };
 
   const getAllAfter = (cursor: MessageID): Message[] => {
     const all = getAllMessages();
