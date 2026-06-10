@@ -319,6 +319,8 @@
     const $formRaw = $clone.querySelector("#form-raw");
     const $fieldset = $clone.querySelector("fieldset");
     const $closeButton = $clone.querySelector(".close-card");
+    const $compactButton = $clone.querySelector(".compact-storage");
+    const $compactStatus = $clone.querySelector(".compact-status");
     const $syncNowButton = $clone.querySelector(".sync-now");
     $closeButton?.addEventListener("click", (e) => {
       const card = $closeButton?.closest(".card");
@@ -328,6 +330,13 @@
     });
     if (!$fieldset)
       return;
+    $compactButton?.addEventListener("click", (e) => {
+      e.preventDefault();
+      const { removed, total } = api.compactStorage();
+      if ($compactStatus) {
+        $compactStatus.textContent = `Compaction complete. ${removed} duplicate old message${removed === 1 ? "" : "s"} removed. ${total} messages stored.`;
+      }
+    });
     $syncNowButton?.addEventListener("click", (e) => {
       e.preventDefault();
       replicationService.replicate().then(() => {
@@ -588,7 +597,41 @@
       pubSubService.emit("add");
       return messageID;
     };
+    const normalizeMessageData = (data) => {
+      const { ts, ...rest } = data || {};
+      return rest;
+    };
+    const getCompactKey = (message) => JSON.stringify([
+      message.meta.ns,
+      message.meta.op,
+      normalizeMessageData(message.data)
+    ]);
     const getAllMessages = () => messageStorage.get().messages;
+    const compactStorage = () => {
+      const state = messageStorage.get();
+      const messages = state.messages || [];
+      const cutoff = Date.now() - 1e3 * 60 * 60 * 24 * 14;
+      const olderMessages = messages.filter((m) => m.meta.ts < cutoff);
+      const newerMessages = messages.filter((m) => m.meta.ts >= cutoff);
+      const compacted = /* @__PURE__ */ new Map();
+      [...olderMessages].sort((a, b) => b.meta.ts - a.meta.ts).forEach((message) => {
+        const key = getCompactKey(message);
+        if (!compacted.has(key)) {
+          compacted.set(key, message);
+        }
+      });
+      const compactedMessages = [...newerMessages, ...compacted.values()].sort(
+        (a, b) => a.meta.ts - b.meta.ts
+      );
+      messageStorage.set({
+        ...state,
+        messages: compactedMessages
+      });
+      return {
+        removed: messages.length - compactedMessages.length,
+        total: compactedMessages.length
+      };
+    };
     const getAllAfter = (cursor) => {
       const all = getAllMessages();
       const i = all.findLastIndex((m) => m.id == cursor);
@@ -634,7 +677,8 @@
       getAllMessages,
       getAllAfter,
       append,
-      remove
+      remove,
+      compactStorage
     };
   };
 
