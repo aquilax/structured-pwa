@@ -34,10 +34,25 @@ export interface ApiService {
   compactStorage(): { removed: number; total: number };
 }
 
+const getSeq = (messages: Message[]) => {
+  const next = messages.flatMap(({id}) => {
+    const s = id.split(".").pop()
+    if (s) {
+      return [parseInt(s, 10)];
+    }
+    return [];
+  })
+    .sort()
+    .pop();
+
+  return next ? next+1 : messages.length
+}
+
 export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<MessagesState>, pubSubService: PubSubService) => {
   const add = (namespace: Namespace, data: any): MessageID => {
     const state = messageStorage.get();
-    const messageID = newMessageID(namespace, nodeID, (state.messages || []).length);
+    const seq = getSeq(state.messages || [])
+    const messageID = newMessageID(namespace, nodeID, seq);
     const message: Message = {
       id: messageID,
       meta: {

@@ -575,10 +575,21 @@
   };
   var namespaceHome = "namespaceHomeV1";
   var namespaceConfig = "namespaceConfigV1";
+  var getSeq = (messages) => {
+    const next = messages.flatMap(({ id }) => {
+      const s = id.split(".").pop();
+      if (s) {
+        return [parseInt(s, 10)];
+      }
+      return [];
+    }).sort().pop();
+    return next ? next + 1 : messages.length;
+  };
   var apiService = (nodeID, messageStorage, pubSubService) => {
     const add = (namespace, data) => {
       const state = messageStorage.get();
-      const messageID = newMessageID(namespace, nodeID, (state.messages || []).length);
+      const seq = getSeq(state.messages || []);
+      const messageID = newMessageID(namespace, nodeID, seq);
       const message = {
         id: messageID,
         meta: {
