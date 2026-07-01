@@ -42,7 +42,7 @@ const getSeq = (messages: Message[]) => {
     }
     return [];
   })
-    .sort()
+    .sort((a, b) => a - b)
     .pop();
 
   return next ? next+1 : messages.length

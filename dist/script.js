@@ -582,7 +582,7 @@
         return [parseInt(s, 10)];
       }
       return [];
-    }).sort().pop();
+    }).sort((a, b) => a - b).pop();
     return next ? next + 1 : messages.length;
   };
   var apiService = (nodeID, messageStorage, pubSubService) => {
