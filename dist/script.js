@@ -59,7 +59,7 @@
     const saveState = (state) => replicationStorage.set(state);
     const getLastUpdate = () => loadState().lastUpdate;
     const replicate = async () => {
-      if (!connectionService.isOnline) {
+      if (!connectionService.isOnline()) {
         return Promise.reject("offline");
       }
       const config = configService.get();
@@ -404,7 +404,7 @@
     };
     const getNamespaceConfig = async (namespace) => {
       return getNamespaceData(namespaceConfig).then(
-        (data) => data.find((c) => c.namespace === namespace) || {
+        (data) => data.filter((c) => c.namespace === namespace).pop() || {
           namespace,
           config: []
         }
@@ -418,6 +418,14 @@
       const data = await getNamespaceData(namespace);
       return data.pop();
     };
+    const getNamespaceConfigNamespaces = async () => {
+      const namespaces = (await getNamespaceData(namespaceConfig)).map((record) => record?.namespace).filter((namespace) => typeof namespace === "string" && namespace.length > 0);
+      return [...new Set(namespaces)];
+    };
+    const getLatestNamespaceConfig = async (namespace) => {
+      const data = await getNamespaceData(namespaceConfig);
+      return data.filter((record) => record?.namespace === namespace).pop();
+    };
     const remove = async (id) => {
       const state = messageStorage.get();
       messageStorage.set({
@@ -430,6 +438,8 @@
       getNamespaceConfig,
       getNamespaceData,
       getLatestNamespaceData,
+      getNamespaceConfigNamespaces,
+      getLatestNamespaceConfig,
       add,
       getAllMessages,
       getAllAfter,
@@ -467,19 +477,32 @@
     });
     if (!$fieldset)
       return;
-    $magicNamespaces?.replaceChildren(
-      ...magicNamespaces.map((namespace) => {
-        const option = document.createElement("option");
-        option.value = namespace;
-        return option;
-      })
-    );
+    const setNamespaceOptions = (namespaces) => {
+      $magicNamespaces?.replaceChildren(
+        ...namespaces.map((namespace) => {
+          const option = document.createElement("option");
+          option.value = namespace;
+          return option;
+        })
+      );
+    };
+    setNamespaceOptions(magicNamespaces);
+    api.getNamespaceConfigNamespaces().then((namespaces) => {
+      setNamespaceOptions([
+        ...magicNamespaces,
+        ...namespaces.map((namespace) => `${magicNamespaces[1]}.${namespace}`)
+      ]);
+    });
     $loadRawButton?.addEventListener("click", async () => {
-      const namespace = $namespaceInput?.value.trim();
-      if (!namespace || !$rawMessage)
+      const selectedNamespace = $namespaceInput?.value.trim();
+      if (!selectedNamespace || !$rawMessage)
         return;
-      const data = await api.getLatestNamespaceData(namespace);
+      const [namespace, configNamespace] = selectedNamespace.split(`${magicNamespaces[1]}.`);
+      const data = configNamespace === void 0 ? await api.getLatestNamespaceData(selectedNamespace) : await api.getLatestNamespaceConfig(configNamespace);
       if (data !== void 0) {
+        if ($namespaceInput && configNamespace !== void 0) {
+          $namespaceInput.value = magicNamespaces[1];
+        }
         $rawMessage.value = JSON.stringify(data, null, 2);
       }
     });
@@ -727,7 +750,7 @@
     const emit = (hook, ...args) => subscriptions.forEach((s) => s.hook == hook && s.cb(...args));
     const on = (hook, cb) => subscriptions.push({ hook, cb });
     const off = (hook, cb) => {
-      subscriptions = subscriptions.filter((s) => s.hook === hook && s.cb === cb);
+      subscriptions = subscriptions.filter((s) => s.hook !== hook || s.cb !== cb);
     };
     return {
       on,
