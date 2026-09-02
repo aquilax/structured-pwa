@@ -155,11 +155,13 @@
           <form id="form-raw">
             <fieldset class="config-container">
               <label>Namespace
-                <input type="text" name="namespace" required/>
+                <input type="text" name="namespace" list="magic-namespaces" required/>
               </label>
+              <datalist id="magic-namespaces"></datalist>
               <textarea id="raw-message" name="rawMessage" required></textarea>
             </fieldset>
             <fieldset class="ar">
+              <button type="button" class="button load-raw">load</button>
               <button type="submit" class="button add-raw">add</button>
             </fieldset>
           </form>

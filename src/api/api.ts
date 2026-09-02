@@ -20,13 +20,17 @@ type HomeElement = {
   name: string;
 };
 
-const namespaceHome: Namespace = "namespaceHomeV1";
-const namespaceConfig: Namespace = "namespaceConfigV1";
+export const magicNamespaces: Namespace[] = [
+  "namespaceHomeV1",
+  "namespaceConfigV1",
+];
+const [namespaceHome, namespaceConfig] = magicNamespaces;
 
 export interface ApiService {
   getHomeElements(): Promise<HomeElement[]>;
   getNamespaceConfig(namespace: Namespace): Promise<Record<string, any>>;
   getNamespaceData(namespace: Namespace): Promise<Array<Record<string, any>>>;
+  getLatestNamespaceData(namespace: Namespace): Promise<Record<string, any> | undefined>;
   add(namespace: Namespace, data: any): MessageID;
   getAllAfter(cursor: MessageID): Message[];
   append(messages: Message[]): MessagesState;
@@ -154,6 +158,11 @@ export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<Messag
     return data.filter((m) => m.meta.ns === namespace).map((m) => m.data);
   };
 
+  const getLatestNamespaceData = async (namespace: Namespace): Promise<Record<string, any> | undefined> => {
+    const data = await getNamespaceData(namespace);
+    return data.pop();
+  };
+
   const remove = async (id: MessageID): Promise<void> => {
     const state = messageStorage.get();
     messageStorage.set({
@@ -166,6 +175,7 @@ export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<Messag
     getHomeElements,
     getNamespaceConfig,
     getNamespaceData,
+    getLatestNamespaceData,
     add,
     getAllMessages,
     getAllAfter,

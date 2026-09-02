@@ -306,6 +306,139 @@
     $form?.querySelector(autofocus)?.focus();
   };
 
+  // src/api/api.ts
+  var messagesStorageKey = "STORAGE";
+  var defaultMessagesState = {
+    messages: []
+  };
+  var magicNamespaces = [
+    "namespaceHomeV1",
+    "namespaceConfigV1"
+  ];
+  var [namespaceHome, namespaceConfig] = magicNamespaces;
+  var getSeq = (messages) => {
+    const next = messages.flatMap(({ id }) => {
+      const s = id.split(".").pop();
+      if (s) {
+        return [parseInt(s, 10)];
+      }
+      return [];
+    }).sort((a, b) => a - b).pop();
+    return next ? next + 1 : messages.length;
+  };
+  var apiService = (nodeID, messageStorage, pubSubService) => {
+    const add = (namespace, data) => {
+      const state = messageStorage.get();
+      const seq = getSeq(state.messages || []);
+      const messageID = newMessageID(namespace, nodeID, seq);
+      const message = {
+        id: messageID,
+        meta: {
+          node: nodeID,
+          ns: namespace,
+          op: "ADD",
+          messageID: EmptyMessageID,
+          ts: (/* @__PURE__ */ new Date()).getTime()
+        },
+        data
+      };
+      messageStorage.set({
+        ...state,
+        messages: [...state.messages || [], message]
+      });
+      pubSubService.emit("add");
+      return messageID;
+    };
+    const normalizeMessageData = (data) => {
+      const { ts, ...rest } = data || {};
+      return rest;
+    };
+    const getCompactKey = (message) => JSON.stringify([
+      message.meta.ns,
+      message.meta.op,
+      normalizeMessageData(message.data)
+    ]);
+    const getAllMessages = () => messageStorage.get().messages;
+    const compactStorage = () => {
+      const state = messageStorage.get();
+      const messages = state.messages || [];
+      const cutoff = Date.now() - 1e3 * 60 * 60 * 24 * 14;
+      const olderMessages = messages.filter((m) => m.meta.ts < cutoff);
+      const newerMessages = messages.filter((m) => m.meta.ts >= cutoff);
+      const compacted = /* @__PURE__ */ new Map();
+      [...olderMessages].sort((a, b) => b.meta.ts - a.meta.ts).forEach((message) => {
+        const key = getCompactKey(message);
+        if (!compacted.has(key)) {
+          compacted.set(key, message);
+        }
+      });
+      const compactedMessages = [...newerMessages, ...compacted.values()].sort(
+        (a, b) => a.meta.ts - b.meta.ts
+      );
+      messageStorage.set({
+        ...state,
+        messages: compactedMessages
+      });
+      return {
+        removed: messages.length - compactedMessages.length,
+        total: compactedMessages.length
+      };
+    };
+    const getAllAfter = (cursor) => {
+      const all = getAllMessages();
+      const i = all.findLastIndex((m) => m.id == cursor);
+      return i === -1 ? all : all.slice(i + 1);
+    };
+    const append = (messages) => {
+      const state = messageStorage.get();
+      const ids = state.messages.map((m) => m.id);
+      const newMessages = [...state.messages || [], ...messages.filter((m) => !ids.includes(m.id))];
+      return messageStorage.set({
+        ...state,
+        messages: newMessages
+      });
+    };
+    const getHomeElements = async () => {
+      const record = (await getNamespaceData(namespaceHome)).pop();
+      return record?.config || [{ namespace: "$config", name: "Config" }];
+    };
+    const getNamespaceConfig = async (namespace) => {
+      return getNamespaceData(namespaceConfig).then(
+        (data) => data.find((c) => c.namespace === namespace) || {
+          namespace,
+          config: []
+        }
+      );
+    };
+    const getNamespaceData = async (namespace) => {
+      const data = await getAllMessages();
+      return data.filter((m) => m.meta.ns === namespace).map((m) => m.data);
+    };
+    const getLatestNamespaceData = async (namespace) => {
+      const data = await getNamespaceData(namespace);
+      return data.pop();
+    };
+    const remove = async (id) => {
+      const state = messageStorage.get();
+      messageStorage.set({
+        ...state,
+        messages: state.messages.filter((m) => m.id !== id)
+      });
+    };
+    return {
+      getHomeElements,
+      getNamespaceConfig,
+      getNamespaceData,
+      getLatestNamespaceData,
+      add,
+      getAllMessages,
+      getAllAfter,
+      append,
+      remove,
+      compactStorage
+    };
+  };
+
   // src/components/config.ts
   var renderConfig = ({
     configService,
@@ -317,6 +450,10 @@
     const $clone = document.importNode($templateConfig.content, true);
     const $form = $clone.querySelector("form");
     const $formRaw = $clone.querySelector("#form-raw");
+    const $namespaceInput = $clone.querySelector('input[name="namespace"]');
+    const $rawMessage = $clone.querySelector('textarea[name="rawMessage"]');
+    const $magicNamespaces = $clone.querySelector("#magic-namespaces");
+    const $loadRawButton = $clone.querySelector(".load-raw");
     const $fieldset = $clone.querySelector("fieldset");
     const $closeButton = $clone.querySelector(".close-card");
     const $compactButton = $clone.querySelector(".compact-storage");
@@ -330,6 +467,22 @@
     });
     if (!$fieldset)
       return;
+    $magicNamespaces?.replaceChildren(
+      ...magicNamespaces.map((namespace) => {
+        const option = document.createElement("option");
+        option.value = namespace;
+        return option;
+      })
+    );
+    $loadRawButton?.addEventListener("click", async () => {
+      const namespace = $namespaceInput?.value.trim();
+      if (!namespace || !$rawMessage)
+        return;
+      const data = await api.getLatestNamespaceData(namespace);
+      if (data !== void 0) {
+        $rawMessage.value = JSON.stringify(data, null, 2);
+      }
+    });
     $compactButton?.addEventListener("click", (e) => {
       e.preventDefault();
       const { removed, total } = api.compactStorage();
@@ -565,131 +718,6 @@
     return {
       get,
       set
-    };
-  };
-
-  // src/api/api.ts
-  var messagesStorageKey = "STORAGE";
-  var defaultMessagesState = {
-    messages: []
-  };
-  var namespaceHome = "namespaceHomeV1";
-  var namespaceConfig = "namespaceConfigV1";
-  var getSeq = (messages) => {
-    const next = messages.flatMap(({ id }) => {
-      const s = id.split(".").pop();
-      if (s) {
-        return [parseInt(s, 10)];
-      }
-      return [];
-    }).sort((a, b) => a - b).pop();
-    return next ? next + 1 : messages.length;
-  };
-  var apiService = (nodeID, messageStorage, pubSubService) => {
-    const add = (namespace, data) => {
-      const state = messageStorage.get();
-      const seq = getSeq(state.messages || []);
-      const messageID = newMessageID(namespace, nodeID, seq);
-      const message = {
-        id: messageID,
-        meta: {
-          node: nodeID,
-          ns: namespace,
-          op: "ADD",
-          messageID: EmptyMessageID,
-          ts: (/* @__PURE__ */ new Date()).getTime()
-        },
-        data
-      };
-      messageStorage.set({
-        ...state,
-        messages: [...state.messages || [], message]
-      });
-      pubSubService.emit("add");
-      return messageID;
-    };
-    const normalizeMessageData = (data) => {
-      const { ts, ...rest } = data || {};
-      return rest;
-    };
-    const getCompactKey = (message) => JSON.stringify([
-      message.meta.ns,
-      message.meta.op,
-      normalizeMessageData(message.data)
-    ]);
-    const getAllMessages = () => messageStorage.get().messages;
-    const compactStorage = () => {
-      const state = messageStorage.get();
-      const messages = state.messages || [];
-      const cutoff = Date.now() - 1e3 * 60 * 60 * 24 * 14;
-      const olderMessages = messages.filter((m) => m.meta.ts < cutoff);
-      const newerMessages = messages.filter((m) => m.meta.ts >= cutoff);
-      const compacted = /* @__PURE__ */ new Map();
-      [...olderMessages].sort((a, b) => b.meta.ts - a.meta.ts).forEach((message) => {
-        const key = getCompactKey(message);
-        if (!compacted.has(key)) {
-          compacted.set(key, message);
-        }
-      });
-      const compactedMessages = [...newerMessages, ...compacted.values()].sort(
-        (a, b) => a.meta.ts - b.meta.ts
-      );
-      messageStorage.set({
-        ...state,
-        messages: compactedMessages
-      });
-      return {
-        removed: messages.length - compactedMessages.length,
-        total: compactedMessages.length
-      };
-    };
-    const getAllAfter = (cursor) => {
-      const all = getAllMessages();
-      const i = all.findLastIndex((m) => m.id == cursor);
-      return i === -1 ? all : all.slice(i + 1);
-    };
-    const append = (messages) => {
-      const state = messageStorage.get();
-      const ids = state.messages.map((m) => m.id);
-      const newMessages = [...state.messages || [], ...messages.filter((m) => !ids.includes(m.id))];
-      return messageStorage.set({
-        ...state,
-        messages: newMessages
-      });
-    };
-    const getHomeElements = async () => {
-      const record = (await getNamespaceData(namespaceHome)).pop();
-      return record?.config || [{ namespace: "$config", name: "Config" }];
-    };
-    const getNamespaceConfig = async (namespace) => {
-      return getNamespaceData(namespaceConfig).then(
-        (data) => data.find((c) => c.namespace === namespace) || {
-          namespace,
-          config: []
-        }
-      );
-    };
-    const getNamespaceData = async (namespace) => {
-      const data = await getAllMessages();
-      return data.filter((m) => m.meta.ns === namespace).map((m) => m.data);
-    };
-    const remove = async (id) => {
-      const state = messageStorage.get();
-      messageStorage.set({
-        ...state,
-        messages: state.messages.filter((m) => m.id !== id)
-      });
-    };
-    return {
-      getHomeElements,
-      getNamespaceConfig,
-      getNamespaceData,
-      add,
-      getAllMessages,
-      getAllAfter,
-      append,
-      remove,
-      compactStorage
     };
   };
 
