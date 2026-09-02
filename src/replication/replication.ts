@@ -53,7 +53,7 @@ export const getReplicationService = ({
   const getLastUpdate = () => loadState().lastUpdate;
 
   const replicate = async () => {
-    if (!connectionService.isOnline) {
+    if (!connectionService.isOnline()) {
       return Promise.reject("offline");
     }
 
