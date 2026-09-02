@@ -37,20 +37,36 @@ export const renderConfig = ({
 
   if (!$fieldset) return;
 
-  $magicNamespaces?.replaceChildren(
-    ...magicNamespaces.map((namespace) => {
+  const setNamespaceOptions = (namespaces: string[]) => {
+    $magicNamespaces?.replaceChildren(
+      ...namespaces.map((namespace) => {
       const option = document.createElement("option");
       option.value = namespace;
       return option;
-    })
-  );
+      })
+    );
+  };
+
+  setNamespaceOptions(magicNamespaces);
+  api.getNamespaceConfigNamespaces().then((namespaces) => {
+    setNamespaceOptions([
+      ...magicNamespaces,
+      ...namespaces.map((namespace) => `${magicNamespaces[1]}.${namespace}`),
+    ]);
+  });
 
   $loadRawButton?.addEventListener("click", async () => {
-    const namespace = $namespaceInput?.value.trim();
-    if (!namespace || !$rawMessage) return;
+    const selectedNamespace = $namespaceInput?.value.trim();
+    if (!selectedNamespace || !$rawMessage) return;
 
-    const data = await api.getLatestNamespaceData(namespace);
+    const [namespace, configNamespace] = selectedNamespace.split(`${magicNamespaces[1]}.`);
+    const data = configNamespace === undefined
+      ? await api.getLatestNamespaceData(selectedNamespace)
+      : await api.getLatestNamespaceConfig(configNamespace);
     if (data !== undefined) {
+      if ($namespaceInput && configNamespace !== undefined) {
+        $namespaceInput.value = magicNamespaces[1];
+      }
       $rawMessage.value = JSON.stringify(data, null, 2);
     }
   });

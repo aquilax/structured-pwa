@@ -31,6 +31,8 @@ export interface ApiService {
   getNamespaceConfig(namespace: Namespace): Promise<Record<string, any>>;
   getNamespaceData(namespace: Namespace): Promise<Array<Record<string, any>>>;
   getLatestNamespaceData(namespace: Namespace): Promise<Record<string, any> | undefined>;
+  getNamespaceConfigNamespaces(): Promise<string[]>;
+  getLatestNamespaceConfig(namespace: Namespace): Promise<Record<string, any> | undefined>;
   add(namespace: Namespace, data: any): MessageID;
   getAllAfter(cursor: MessageID): Message[];
   append(messages: Message[]): MessagesState;
@@ -163,6 +165,18 @@ export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<Messag
     return data.pop();
   };
 
+  const getNamespaceConfigNamespaces = async (): Promise<string[]> => {
+    const namespaces = (await getNamespaceData(namespaceConfig))
+      .map((record) => record?.namespace)
+      .filter((namespace): namespace is string => typeof namespace === "string" && namespace.length > 0);
+    return [...new Set(namespaces)];
+  };
+
+  const getLatestNamespaceConfig = async (namespace: Namespace): Promise<Record<string, any> | undefined> => {
+    const data = await getNamespaceData(namespaceConfig);
+    return data.filter((record) => record?.namespace === namespace).pop();
+  };
+
   const remove = async (id: MessageID): Promise<void> => {
     const state = messageStorage.get();
     messageStorage.set({
@@ -176,6 +190,8 @@ export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<Messag
     getNamespaceConfig,
     getNamespaceData,
     getLatestNamespaceData,
+    getNamespaceConfigNamespaces,
+    getLatestNamespaceConfig,
     add,
     getAllMessages,
     getAllAfter,
