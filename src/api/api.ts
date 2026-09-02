@@ -148,7 +148,7 @@ export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<Messag
   const getNamespaceConfig = async (namespace: Namespace) => {
     return getNamespaceData(namespaceConfig).then(
       (data) =>
-        data.find((c) => c.namespace === namespace) || {
+        data.filter((c) => c.namespace === namespace).pop() || {
           namespace: namespace,
           config: [],
         }
