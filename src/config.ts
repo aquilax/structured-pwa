@@ -30,7 +30,10 @@ export const getConfigService = (configStorage: StorageAdapter<ConfigState>) => 
     };
     const loadedConfig = configStorage.get();
     const config = { ...defaultConfig, ...loadedConfig };
-    return loadedConfig != config ? save(config) : config;
+    const needsSave = !loadedConfig || Object.keys(defaultConfig).some(
+      (key) => (loadedConfig as any)[key] === undefined
+    );
+    return needsSave ? save(config) : config;
   };
 
   return {
