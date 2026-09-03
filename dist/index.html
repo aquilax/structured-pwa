@@ -112,8 +112,8 @@
   <body>
     <div class="wrapper">
       <div id="status">
-        <span id="sync-status-icon" style="display: none">🔃</span>
-        <span id="online-status-icon" style="display: none">💡</span>
+        <span id="sync-status-icon" style="display: none" role="status">🔃</span>
+        <span id="online-status-icon" style="display: none" role="status">💡</span>
       </div>
       <h1>Structured data</h1>
       <div id="container"></div>
@@ -138,7 +138,7 @@
       <div class="card config">
         <header>
           <h2 class="heading">Config</h2>
-          <button type="button" class="button close-card">❌</button>
+          <button type="button" class="button close-card" aria-label="Close">❌</button>
         </header>
 
         <form>
