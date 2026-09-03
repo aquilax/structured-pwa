@@ -1,5 +1,5 @@
 export type Hook = "add" | "connectionOnline" | "connectionOffline" | "replicationStart" | "replicationStop" | "checkConnection";
-export type Callback = (...args: any) => void;
+export type Callback<T extends any[] = any[]> = (...args: T) => void;
 
 export interface PubSubService {
   emit(hook: Hook, ...args: any): void;
