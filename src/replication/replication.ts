@@ -84,7 +84,7 @@ export const getReplicationService = ({
         if (r.ok) {
           return r.json();
         }
-        throw "error sync";
+        throw new Error("Replication sync failed");
       })
       .then((body) => {
         console.log("REPLICATION <<<", body);

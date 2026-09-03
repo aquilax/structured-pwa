@@ -86,7 +86,7 @@
         if (r.ok) {
           return r.json();
         }
-        throw "error sync";
+        throw new Error("Replication sync failed");
       }).then((body2) => {
         console.log("REPLICATION <<<", body2);
         if (body2.messages) {
@@ -286,7 +286,7 @@
         const tds = config2.map((c) => {
           return dom("td", {}, `${formatValue(c.type, row[c.name])}`);
         });
-        const isToday = row.ts && row.ts.toString().substr(0, 10) === today;
+        const isToday = row.ts && row.ts.toString().substring(0, 10) === today;
         return dom(
           "tr",
           {
@@ -711,7 +711,10 @@
       };
       const loadedConfig = configStorage.get();
       const config = { ...defaultConfig, ...loadedConfig };
-      return loadedConfig != config ? save(config) : config;
+      const needsSave = !loadedConfig || Object.keys(defaultConfig).some(
+        (key) => loadedConfig[key] === void 0
+      );
+      return needsSave ? save(config) : config;
     };
     return {
       get,
@@ -732,11 +735,20 @@
     };
   };
   var withCache = (f) => {
-    let cache = null;
-    const get = () => cache ? cache : f.get();
+    let cache;
+    let hasCache = false;
+    const get = () => {
+      if (!hasCache) {
+        cache = f.get();
+        hasCache = true;
+      }
+      return cache;
+    };
     const set = (data) => {
-      cache = null;
-      return f.set(data);
+      const result = f.set(data);
+      cache = result;
+      hasCache = true;
+      return result;
     };
     return {
       get,

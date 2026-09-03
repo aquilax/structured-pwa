@@ -218,7 +218,7 @@ export const renderNamespace = async ({
         const tds = config.map((c) => {
           return dom("td", {}, `${formatValue(c.type, row[c.name])}`);
         });
-        const isToday = row.ts && row.ts.toString().substr(0, 10) === today;
+        const isToday = row.ts && row.ts.toString().substring(0, 10) === today;
         return dom(
           "tr",
           {
