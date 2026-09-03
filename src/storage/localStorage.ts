@@ -20,11 +20,20 @@ export const localStorageAdapter = <T>(storageKey: StorageKey, def: Partial<T> =
 };
 
 export const withCache = <T>(f: StorageAdapter<T>) => {
-  let cache: T | null = null;
-  const get = () => (cache ? cache : f.get());
+  let cache: T;
+  let hasCache = false;
+  const get = () => {
+    if (!hasCache) {
+      cache = f.get();
+      hasCache = true;
+    }
+    return cache;
+  };
   const set = (data: T): T => {
-    cache = null;
-    return f.set(data);
+    const result = f.set(data);
+    cache = result;
+    hasCache = true;
+    return result;
   };
 
   return {
