@@ -1,6 +1,7 @@
 DIST := ./dist
 ASSETS := ./assets
 SRC := ./src
+SRC_FILES := $(shell find $(SRC) -type f -name '*.ts')
 resolutions := 48 72 96 144 192 512
 ALL_ICONS := $(foreach resolution, $(resolutions), $(DIST)/icon_$(resolution).png)
 
@@ -11,7 +12,7 @@ build: clean-sw $(DIST)/script.js
 copy_assets:
 	cp $(ASSETS)/* $(DIST)
 
-$(DIST)/script.js: $(SRC)/index.ts $(wildcard $(SRC)/*)
+$(DIST)/script.js: $(SRC)/index.ts $(SRC_FILES)
 	./node_modules/.bin/esbuild $< --bundle --outfile=$@
 
 $(DIST)/sw.js: workbox-config.js $(DIST)/script.js

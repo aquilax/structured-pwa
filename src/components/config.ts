@@ -1,4 +1,4 @@
-import { ApiService } from "api/api";
+import { ApiService, magicNamespaces } from "api/api";
 import { ConfigState, ConfigService } from "config";
 import { ReplicationService } from "replication/replication";
 import { dom } from "utils";
@@ -18,6 +18,10 @@ export const renderConfig = ({
   const $clone = document.importNode($templateConfig.content, true);
   const $form = $clone.querySelector<HTMLFormElement>("form");
   const $formRaw = $clone.querySelector<HTMLFormElement>("#form-raw");
+  const $namespaceInput = $clone.querySelector<HTMLInputElement>('input[name="namespace"]');
+  const $rawMessage = $clone.querySelector<HTMLTextAreaElement>('textarea[name="rawMessage"]');
+  const $magicNamespaces = $clone.querySelector<HTMLDataListElement>("#magic-namespaces");
+  const $loadRawButton = $clone.querySelector<HTMLButtonElement>(".load-raw");
   const $fieldset = $clone.querySelector<HTMLFieldSetElement>("fieldset");
   const $closeButton = $clone.querySelector<HTMLHeadElement>(".close-card");
   const $compactButton = $clone.querySelector<HTMLButtonElement>(".compact-storage");
@@ -32,6 +36,40 @@ export const renderConfig = ({
   });
 
   if (!$fieldset) return;
+
+  const setNamespaceOptions = (namespaces: string[]) => {
+    $magicNamespaces?.replaceChildren(
+      ...namespaces.map((namespace) => {
+      const option = document.createElement("option");
+      option.value = namespace;
+      return option;
+      })
+    );
+  };
+
+  setNamespaceOptions(magicNamespaces);
+  api.getNamespaceConfigNamespaces().then((namespaces) => {
+    setNamespaceOptions([
+      ...magicNamespaces,
+      ...namespaces.map((namespace) => `${magicNamespaces[1]}.${namespace}`),
+    ]);
+  });
+
+  $loadRawButton?.addEventListener("click", async () => {
+    const selectedNamespace = $namespaceInput?.value.trim();
+    if (!selectedNamespace || !$rawMessage) return;
+
+    const [namespace, configNamespace] = selectedNamespace.split(`${magicNamespaces[1]}.`);
+    const data = configNamespace === undefined
+      ? await api.getLatestNamespaceData(selectedNamespace)
+      : await api.getLatestNamespaceConfig(configNamespace);
+    if (data !== undefined) {
+      if ($namespaceInput && configNamespace !== undefined) {
+        $namespaceInput.value = magicNamespaces[1];
+      }
+      $rawMessage.value = JSON.stringify(data, null, 2);
+    }
+  });
 
   $compactButton?.addEventListener("click", (e) => {
     e.preventDefault();

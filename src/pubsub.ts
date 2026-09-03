@@ -13,7 +13,7 @@ export const getPubSubService = () => {
   const emit = (hook: Hook, ...args: any) => subscriptions.forEach((s) => s.hook == hook && s.cb(...args));
   const on = (hook: Hook, cb: Callback) => subscriptions.push({ hook, cb });
   const off = (hook: Hook, cb: Callback) => {
-    subscriptions = subscriptions.filter((s) => s.hook === hook && s.cb === cb);
+    subscriptions = subscriptions.filter((s) => s.hook !== hook || s.cb !== cb);
   };
 
   return {

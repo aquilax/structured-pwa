@@ -20,13 +20,19 @@ type HomeElement = {
   name: string;
 };
 
-const namespaceHome: Namespace = "namespaceHomeV1";
-const namespaceConfig: Namespace = "namespaceConfigV1";
+export const magicNamespaces: Namespace[] = [
+  "namespaceHomeV1",
+  "namespaceConfigV1",
+];
+const [namespaceHome, namespaceConfig] = magicNamespaces;
 
 export interface ApiService {
   getHomeElements(): Promise<HomeElement[]>;
   getNamespaceConfig(namespace: Namespace): Promise<Record<string, any>>;
   getNamespaceData(namespace: Namespace): Promise<Array<Record<string, any>>>;
+  getLatestNamespaceData(namespace: Namespace): Promise<Record<string, any> | undefined>;
+  getNamespaceConfigNamespaces(): Promise<string[]>;
+  getLatestNamespaceConfig(namespace: Namespace): Promise<Record<string, any> | undefined>;
   add(namespace: Namespace, data: any): MessageID;
   getAllAfter(cursor: MessageID): Message[];
   append(messages: Message[]): MessagesState;
@@ -142,7 +148,7 @@ export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<Messag
   const getNamespaceConfig = async (namespace: Namespace) => {
     return getNamespaceData(namespaceConfig).then(
       (data) =>
-        data.find((c) => c.namespace === namespace) || {
+        data.filter((c) => c.namespace === namespace).pop() || {
           namespace: namespace,
           config: [],
         }
@@ -152,6 +158,23 @@ export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<Messag
   const getNamespaceData = async (namespace: Namespace): Promise<Array<Record<string, any>>> => {
     const data = await getAllMessages();
     return data.filter((m) => m.meta.ns === namespace).map((m) => m.data);
+  };
+
+  const getLatestNamespaceData = async (namespace: Namespace): Promise<Record<string, any> | undefined> => {
+    const data = await getNamespaceData(namespace);
+    return data.pop();
+  };
+
+  const getNamespaceConfigNamespaces = async (): Promise<string[]> => {
+    const namespaces = (await getNamespaceData(namespaceConfig))
+      .map((record) => record?.namespace)
+      .filter((namespace): namespace is string => typeof namespace === "string" && namespace.length > 0);
+    return [...new Set(namespaces)];
+  };
+
+  const getLatestNamespaceConfig = async (namespace: Namespace): Promise<Record<string, any> | undefined> => {
+    const data = await getNamespaceData(namespaceConfig);
+    return data.filter((record) => record?.namespace === namespace).pop();
   };
 
   const remove = async (id: MessageID): Promise<void> => {
@@ -166,6 +189,9 @@ export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<Messag
     getHomeElements,
     getNamespaceConfig,
     getNamespaceData,
+    getLatestNamespaceData,
+    getNamespaceConfigNamespaces,
+    getLatestNamespaceConfig,
     add,
     getAllMessages,
     getAllAfter,
