@@ -88,6 +88,7 @@
     const saveState = (state) => replicationStorage.set(state);
     const getLastUpdate = () => Math.max(0, ...Object.values(loadState().targets).map(({ lastUpdate }) => lastUpdate));
     let inFlight;
+    let pendingReplicate = false;
     let autoReplicationTimer;
     const replicateTarget = async (target, state) => {
       const messages = api.getAllAfter(state.cursor);
@@ -131,23 +132,31 @@
       const state = loadState();
       pubSubService.emit("replicationStart", true);
       const targets = config.targets.filter((target) => target.enabled && target.url.trim().length > 0);
-      await Promise.all(targets.map(
-        (target) => replicateTarget(target, state.targets[target.id] || emptyTargetState()).catch(console.error)
-      ));
+      await Promise.all(
+        targets.map(
+          (target) => replicateTarget(target, state.targets[target.id] || emptyTargetState()).catch(console.error)
+        )
+      );
       pubSubService.emit("replicationStop", true);
     };
     const replicate = () => {
-      if (!inFlight) {
-        inFlight = syncTargets().finally(() => {
-          inFlight = void 0;
-          if (configService.get().AutoReplication) {
-            autoReplicationTimer = setTimeout(() => {
-              autoReplicationTimer = void 0;
-              replicate();
-            }, configService.get().ReplicationInterval);
-          }
-        });
+      if (inFlight) {
+        pendingReplicate = true;
+        return inFlight;
       }
+      pendingReplicate = false;
+      inFlight = syncTargets().finally(() => {
+        inFlight = void 0;
+        if (pendingReplicate) {
+          pendingReplicate = false;
+          replicate();
+        } else if (configService.get().AutoReplication) {
+          autoReplicationTimer = setTimeout(() => {
+            autoReplicationTimer = void 0;
+            replicate();
+          }, configService.get().ReplicationInterval);
+        }
+      });
       return inFlight;
     };
     if (configService.get().AutoReplication) {
@@ -373,6 +382,15 @@
     return next ? next + 1 : messages.length;
   };
   var apiService = (nodeID, messageStorage, pubSubService) => {
+    const sortMessages = (messages) => {
+      return [...messages].sort((a, b) => {
+        const tsA = a.meta?.ts || 0;
+        const tsB = b.meta?.ts || 0;
+        if (tsA !== tsB)
+          return tsA - tsB;
+        return a.id.localeCompare(b.id);
+      });
+    };
     const add = (namespace, data) => {
       const state = messageStorage.get();
       const seq = getSeq(state.messages || []);
@@ -390,7 +408,7 @@
       };
       messageStorage.set({
         ...state,
-        messages: [...state.messages || [], message]
+        messages: sortMessages([...state.messages || [], message])
       });
       pubSubService.emit("add");
       return messageID;
@@ -418,9 +436,7 @@
           compacted.set(key, message);
         }
       });
-      const compactedMessages = [...newerMessages, ...compacted.values()].sort(
-        (a, b) => a.meta.ts - b.meta.ts
-      );
+      const compactedMessages = sortMessages([...newerMessages, ...compacted.values()]);
       messageStorage.set({
         ...state,
         messages: compactedMessages
@@ -432,13 +448,23 @@
     };
     const getAllAfter = (cursor) => {
       const all = getAllMessages();
-      const i = all.findLastIndex((m) => m.id == cursor);
-      return i === -1 ? all : all.slice(i + 1);
+      if (!cursor || cursor === EmptyMessageID) {
+        return all;
+      }
+      const i = all.findIndex((m) => m.id === cursor);
+      if (i !== -1) {
+        return all.slice(i + 1);
+      }
+      return all;
     };
     const append = (messages) => {
       const state = messageStorage.get();
-      const ids = state.messages.map((m) => m.id);
-      const newMessages = [...state.messages || [], ...messages.filter((m) => !ids.includes(m.id))];
+      const existingIds = new Set((state.messages || []).map((m) => m.id));
+      const toAdd = messages.filter((m) => !existingIds.has(m.id));
+      if (toAdd.length === 0) {
+        return state;
+      }
+      const newMessages = sortMessages([...state.messages || [], ...toAdd]);
       return messageStorage.set({
         ...state,
         messages: newMessages
