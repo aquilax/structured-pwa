@@ -47,6 +47,18 @@
   var defaultReplicationState = {
     targets: {}
   };
+  var parseResponse = (body) => {
+    if (!body || typeof body !== "object" || !Array.isArray(body.messages)) {
+      throw new Error("Replication response must contain a messages array");
+    }
+    if (body.cursor !== void 0 && typeof body.cursor !== "string") {
+      throw new Error("Replication response cursor must be a string");
+    }
+    return {
+      cursor: body.cursor,
+      messages: body.messages
+    };
+  };
   var getReplicationService = ({
     api,
     replicationStorage,
@@ -80,9 +92,7 @@
         return result;
       }, {});
       const state = { targets };
-      if (!loadedState || !loadedState.targets) {
-        replicationStorage.set(state);
-      }
+      replicationStorage.set(state);
       return state;
     };
     const saveState = (state) => replicationStorage.set(state);
@@ -91,7 +101,7 @@
     let pendingReplicate = false;
     let autoReplicationTimer;
     const replicateTarget = async (target, state) => {
-      const messages = api.getAllAfter(state.cursor);
+      const messages = await api.getAllAfter(state.cursor);
       const body = { cursor: state.cursor, messages };
       console.log("REPLICATION >>>", target.url, body);
       const response = await fetch(target.url, {
@@ -107,7 +117,7 @@
       if (!response.ok) {
         throw new Error(`Replication sync failed for ${target.url}`);
       }
-      const responseBody = await response.json();
+      const responseBody = parseResponse(await response.json());
       console.log("REPLICATION <<<", target.url, responseBody);
       if (responseBody.messages) {
         api.append(responseBody.messages);
@@ -119,7 +129,7 @@
           ...currentState.targets,
           [target.id]: {
             lastUpdate: (/* @__PURE__ */ new Date()).getTime(),
-            cursor: responseBody.cursor || state.cursor
+            cursor: responseBody.cursor ?? state.cursor
           }
         }
       });
@@ -164,6 +174,9 @@
     } else {
       pubSubService.on("add", debounce(() => replicate(), debounceTimeout));
     }
+    pubSubService.on("connectionOnline", () => {
+      void replicate().catch(() => void 0);
+    });
     return {
       replicate,
       getLastUpdate
@@ -386,22 +399,21 @@
       return [...messages].sort((a, b) => {
         const tsA = a.meta?.ts || 0;
         const tsB = b.meta?.ts || 0;
-        if (tsA !== tsB)
-          return tsA - tsB;
+        if (tsA !== tsB) return tsA - tsB;
         return a.id.localeCompare(b.id);
       });
     };
     const add = (namespace, data) => {
       const state = messageStorage.get();
       const seq = getSeq(state.messages || []);
-      const messageID = newMessageID(namespace, nodeID, seq);
+      const messageId = newMessageID(namespace, nodeID, seq);
       const message = {
-        id: messageID,
+        id: messageId,
         meta: {
           node: nodeID,
           ns: namespace,
           op: "ADD",
-          messageID: EmptyMessageID,
+          message_id: EmptyMessageID,
           ts: (/* @__PURE__ */ new Date()).getTime()
         },
         data
@@ -411,7 +423,7 @@
         messages: sortMessages([...state.messages || [], message])
       });
       pubSubService.emit("add");
-      return messageID;
+      return messageId;
     };
     const normalizeMessageData = (data) => {
       const { ts, ...rest } = data || {};
@@ -547,8 +559,7 @@
         card.remove();
       }
     });
-    if (!$fieldset)
-      return;
+    if (!$fieldset) return;
     const setNamespaceOptions = (namespaces) => {
       $magicNamespaces?.replaceChildren(
         ...namespaces.map((namespace) => {
@@ -567,8 +578,7 @@
     });
     $loadRawButton?.addEventListener("click", async () => {
       const selectedNamespace = $namespaceInput?.value.trim();
-      if (!selectedNamespace || !$rawMessage)
-        return;
+      if (!selectedNamespace || !$rawMessage) return;
       const [namespace, configNamespace] = selectedNamespace.split(`${magicNamespaces[1]}.`);
       const data = configNamespace === void 0 ? await api.getLatestNamespaceData(selectedNamespace) : await api.getLatestNamespaceConfig(configNamespace);
       if (data !== void 0) {
@@ -733,8 +743,7 @@
     const elements = await api.getHomeElements();
     $homeContainer?.addEventListener("click", (e) => {
       const target = e.target;
-      if (!target)
-        return;
+      if (!target) return;
       if (target.matches(".button.home")) {
         e.preventDefault();
         const namespace = target.dataset["namespace"];
@@ -789,8 +798,7 @@
     const $container = global.document.getElementById("container");
     const $syncStatusIcon = global.document.getElementById("sync-status-icon");
     const $onlineStatusIcon = global.document.getElementById("online-status-icon");
-    if (!$container)
-      return;
+    if (!$container) return;
     if ($onlineStatusIcon) {
       pubSubService.on("connectionOnline", () => {
         $onlineStatusIcon.style.display = "inline";
@@ -798,8 +806,8 @@
       pubSubService.on("connectionOffline", () => {
         $onlineStatusIcon.style.display = "none";
       });
-      pubSubService.emit("checkConnection");
     }
+    pubSubService.emit("checkConnection");
     if ($syncStatusIcon) {
       pubSubService.on("replicationStart", () => {
         $syncStatusIcon.style.display = "inline";
