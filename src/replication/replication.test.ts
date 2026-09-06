@@ -117,6 +117,30 @@ test("replication starts when the connection comes online", async () => {
   getReplicationService({
     api,
     replicationStorage: storage,
+    configService: {
+      get: () => ({
+        targets: [{ id: "appendix", url: "http://appendix/sync", enabled: true, apiKey: "key" }],
+        AutoReplication: true,
+        ReplicationInterval: 60000,
+        NodeID: "node",
+      }),
+      save: (config: any) => config,
+    },
+    connectionService: new MockConnection(),
+    pubSubService: pubsub,
+  });
+
+  pubsub.emit("connectionOnline");
+  await vi.waitFor(() => expect((global.fetch as vi.Mock).mock.calls).toHaveLength(1));
+});
+
+test("connection recovery does not sync when automatic replication is disabled", async () => {
+  const storage = new MockStorage<any>();
+  storage.set({ targets: {} });
+  const pubsub = new MockPubSub();
+  getReplicationService({
+    api: new MockApi(),
+    replicationStorage: storage,
     configService: new MockConfig([
       { id: "appendix", url: "http://appendix/sync", enabled: true, apiKey: "key" },
     ]),
@@ -125,7 +149,58 @@ test("replication starts when the connection comes online", async () => {
   });
 
   pubsub.emit("connectionOnline");
-  await vi.waitFor(() => expect((global.fetch as vi.Mock).mock.calls).toHaveLength(1));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect((global.fetch as vi.Mock).mock.calls).toHaveLength(0);
+});
+
+test("entry replication is debounced", async () => {
+  vi.useFakeTimers();
+  try {
+    const storage = new MockStorage<any>();
+    storage.set({ targets: {} });
+    const pubsub = new MockPubSub();
+    getReplicationService({
+      api: new MockApi(),
+      replicationStorage: storage,
+      configService: new MockConfig([
+        { id: "appendix", url: "http://appendix/sync", enabled: true, apiKey: "key" },
+      ]),
+      connectionService: new MockConnection(),
+      pubSubService: pubsub,
+    });
+
+    pubsub.emit("add");
+    pubsub.emit("add");
+    await vi.advanceTimersByTimeAsync(59999);
+    expect((global.fetch as vi.Mock).mock.calls).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(1);
+    await vi.waitFor(() => expect((global.fetch as vi.Mock).mock.calls).toHaveLength(1));
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("automatic replication does not sync during startup", () => {
+  const storage = new MockStorage<any>();
+  storage.set({ targets: {} });
+
+  getReplicationService({
+    api: new MockApi(),
+    replicationStorage: storage,
+    configService: {
+      get: () => ({
+        targets: [{ id: "appendix", url: "http://appendix/sync", enabled: true, apiKey: "key" }],
+        AutoReplication: true,
+        ReplicationInterval: 60000,
+        NodeID: "node",
+      }),
+      save: (config: any) => config,
+    },
+    connectionService: new MockConnection(),
+    pubSubService: new MockPubSub(),
+  });
+
+  expect((global.fetch as vi.Mock).mock.calls).toHaveLength(0);
 });
 
 test("a failed target keeps its cursor unchanged for the next retry", async () => {
