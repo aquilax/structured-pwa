@@ -25,11 +25,11 @@ export class D1Storage {
           )
           .bind(
             msg.id,
-            msg.meta?.ns || "",
-            msg.meta?.op || "ADD",
-            msg.meta?.message_id || EmptyMessageID,
-            msg.meta?.ts || Date.now(),
-            JSON.stringify(msg.data || {}),
+            msg.meta?.ns ?? "",
+            msg.meta?.op ?? "ADD",
+            msg.meta?.message_id ?? EmptyMessageID,
+            msg.meta?.ts ?? Date.now(),
+            JSON.stringify(msg.data ?? {}),
             now
           )
       );
@@ -45,8 +45,8 @@ export class D1Storage {
 
     // 4. Compute response cursor
     const responseCursor =
-      filteredMessages.length > 0
-        ? filteredMessages[filteredMessages.length - 1].id
+      messages.length > 0
+        ? messages[messages.length - 1].id
         : payload.cursor && payload.cursor !== EmptyMessageID
         ? payload.cursor
         : EmptyMessageID;

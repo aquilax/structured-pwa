@@ -181,8 +181,8 @@ func (a *App) processPayload(p *Payload) (*Payload, error) {
 	if err != nil {
 		return nil, err
 	}
-	messages := a.getMessagesAfter(p.Cursor, p.Messages)
-	return a.getResponse(p.Cursor, messages), nil
+	messages, cursor := a.getMessagesAfter(p.Cursor, p.Messages)
+	return a.getResponse(p.Cursor, cursor, messages), nil
 }
 
 func (a *App) saveRequest(p *Payload) error {
@@ -219,12 +219,11 @@ func (a *App) saveRequest(p *Payload) error {
 	return nil
 }
 
-func (a *App) getResponse(messageID MessageID, messages []Message) *Payload {
+func (a *App) getResponse(messageID MessageID, cursor MessageID, messages []Message) *Payload {
 	return &Payload{
 		Cursor: func() MessageID {
-			l := len(messages)
-			if l > 0 {
-				return messages[l-1].ID
+			if cursor != "" {
+				return cursor
 			}
 			if messageID != "" {
 				return messageID
@@ -235,7 +234,7 @@ func (a *App) getResponse(messageID MessageID, messages []Message) *Payload {
 	}
 }
 
-func (a *App) getMessagesAfter(messageID MessageID, incoming []Message) []Message {
+func (a *App) getMessagesAfter(messageID MessageID, incoming []Message) ([]Message, MessageID) {
 	a.RLock()
 	defer a.RUnlock()
 
@@ -268,7 +267,11 @@ func (a *App) getMessagesAfter(messageID MessageID, incoming []Message) []Messag
 			filtered = append(filtered, m)
 		}
 	}
-	return filtered
+	var cursor MessageID
+	if len(res) > 0 {
+		cursor = res[len(res)-1].ID
+	}
+	return filtered, cursor
 }
 
 func (a *App) loadStorage() error {

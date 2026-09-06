@@ -155,3 +155,34 @@ test("a failed target keeps its cursor unchanged for the next retry", async () =
   await replication.replicate();
   expect(storage.get().targets.appendix.cursor).toBe("test.node.1");
 });
+
+test("an empty response cursor cannot reset an advanced target cursor", async () => {
+  const api = new MockApi();
+  api.add("test", { foo: "bar" });
+  const storage = new MockStorage<any>();
+  storage.set({ targets: {} });
+  const fetchMock = global.fetch as vi.Mock;
+  fetchMock
+    .mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ cursor: "test.node.1", messages: [] }),
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ cursor: "-", messages: [] }),
+    });
+
+  const replication = getReplicationService({
+    api,
+    replicationStorage: storage,
+    configService: new MockConfig([
+      { id: "appendix", url: "http://appendix/sync", enabled: true, apiKey: "key" },
+    ]),
+    connectionService: new MockConnection(),
+    pubSubService: new MockPubSub(),
+  });
+
+  await replication.replicate();
+  await replication.replicate();
+  expect(storage.get().targets.appendix.cursor).toBe("test.node.1");
+});
