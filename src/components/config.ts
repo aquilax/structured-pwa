@@ -3,6 +3,8 @@ import { ConfigState, ConfigService } from "config";
 import { ReplicationService } from "replication/replication";
 import { dom } from "utils";
 
+declare const __GIT_HASH__: string;
+
 export const renderConfig = ({
   configService,
   api,
@@ -214,6 +216,7 @@ export const renderConfig = ({
           ...(config.AutoReplication ? { checked: "checked" } : {}),
         })
       ),
+      dom("em", {}, `Version: ${__GIT_HASH__}`),
       dom("em", {}, `Last update: ${new Date(lastUpdate).toLocaleString("sv", { timeZoneName: "short" })}`),
     ].map((f) => dom("div", {}, f));
     $fieldset.replaceChildren(...fields);
