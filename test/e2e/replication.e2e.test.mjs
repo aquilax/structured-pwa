@@ -26,20 +26,76 @@ const waitFor = async (check, timeout = 30000) => {
 };
 
 const startProcess = (command, args, options) => {
-  const child = spawn(command, args, { ...options, stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn(command, args, {
+    ...options,
+    detached: process.platform !== "win32",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
   child.stdout.on("data", () => undefined);
   child.stderr.on("data", () => undefined);
   return child;
 };
 
+const signalProcessGroup = (child, signal) => {
+  if (!child?.pid) return;
+  if (process.platform === "win32") {
+    if (child.exitCode === null) child.kill(signal);
+    return;
+  }
+  try {
+    process.kill(-child.pid, signal);
+  } catch (error) {
+    if (error.code !== "ESRCH" && child.exitCode === null) throw error;
+  }
+};
+
+const getDescendantPids = (rootPid) => {
+  if (process.platform === "win32") return [];
+  const output = execFileSync("ps", ["-eo", "pid=,ppid="], { encoding: "utf8" });
+  const children = new Map();
+  for (const line of output.trim().split("\n")) {
+    const [pid, parentPid] = line.trim().split(/\s+/).map(Number);
+    if (!Number.isNaN(pid) && !Number.isNaN(parentPid)) {
+      const siblings = children.get(parentPid) || [];
+      siblings.push(pid);
+      children.set(parentPid, siblings);
+    }
+  }
+
+  const descendants = [];
+  const visit = (parentPid) => {
+    for (const childPid of children.get(parentPid) || []) {
+      descendants.push(childPid);
+      visit(childPid);
+    }
+  };
+  visit(rootPid);
+  return descendants;
+};
+
 const stopProcess = async (child) => {
-  if (!child || child.exitCode !== null) return;
-  child.kill("SIGTERM");
+  if (!child) return;
+  const descendantPids = getDescendantPids(child.pid);
+  signalProcessGroup(child, "SIGTERM");
+  for (const pid of descendantPids) {
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch (error) {
+      if (error.code !== "ESRCH") throw error;
+    }
+  }
   await Promise.race([
     new Promise((resolve) => child.once("exit", resolve)),
     delay(5000),
   ]);
-  if (child.exitCode === null) child.kill("SIGKILL");
+  for (const pid of descendantPids) {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch (error) {
+      if (error.code !== "ESRCH") throw error;
+    }
+  }
+  signalProcessGroup(child, "SIGKILL");
 };
 
 const sync = async (url, payload, requestToken = token) => {
@@ -105,8 +161,7 @@ describe.skipIf(!enabled)("replication backends", () => {
   }, 60000);
 
   afterAll(async () => {
-    await stopProcess(appendix);
-    await stopProcess(cloudflare);
+    await Promise.all([stopProcess(appendix), stopProcess(cloudflare)]);
     if (tempDir) rmSync(tempDir, { recursive: true, force: true });
   });
 
@@ -115,11 +170,116 @@ describe.skipIf(!enabled)("replication backends", () => {
       const first = await sync(url, { cursor: "-", messages: [message] });
       expect(first.status).toBe(200);
       expect(first.body.messages).toEqual([]);
+      expect(first.body.cursor).toBe(message.id);
 
-      const replay = await sync(url, { cursor: "-", messages: [] });
+      const replay = await sync(url, { cursor: message.id, messages: [] });
       expect(replay.status).toBe(200);
-      expect(replay.body.messages).toHaveLength(1);
-      expect(replay.body.messages[0].id).toBe(message.id);
+      expect(replay.body.messages).toEqual([]);
+      expect(replay.body.cursor).toBe(message.id);
+    }
+  });
+
+  it("converges 100 messages across randomly ordered client syncs", async () => {
+    let seed = 0x5eed;
+    const random = () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 0x100000000;
+    };
+    const messages = Array.from({ length: 100 }, (_, index) => ({
+      id: `tasks.random.${String(index).padStart(3, "0")}`,
+      meta: {
+        ns: "tasks",
+        op: "ADD",
+        message_id: "-",
+        ts: 1700000000000 + index,
+      },
+      data: { index },
+    }));
+    const backends = [appendixUrl, cloudflareUrl];
+    const clients = Array.from({ length: 3 }, () => ({
+      messages: [],
+      pending: new Map(backends.map((url) => [url, []])),
+      cursors: new Map(),
+      requests: [],
+    }));
+
+    const syncClient = async (client, url) => {
+      const cursor = client.cursors.get(url) || "-";
+      const outgoing = client.pending.get(url);
+      const payload = { cursor, messages: outgoing };
+      client.requests.push({ url, payload });
+
+      const result = await sync(url, payload);
+      expect(result.status).toBe(200);
+      for (const message of result.body.messages) {
+        if (!client.messages.some(({ id }) => id === message.id)) {
+          client.messages.push(message);
+        }
+        for (const backend of backends) {
+          if (backend !== url && !client.pending.get(backend).some(({ id }) => id === message.id)) {
+            client.pending.get(backend).push(message);
+          }
+        }
+      }
+      client.messages.sort((left, right) => left.id.localeCompare(right.id));
+      client.pending.set(url, []);
+      client.cursors.set(url, result.body.cursor ?? cursor);
+      return result;
+    };
+
+    for (let index = 0; index < messages.length; index += 1) {
+      const client = clients[Math.floor(random() * clients.length)];
+      client.messages.push(messages[index]);
+      for (const url of backends) {
+        client.pending.get(url).push(messages[index]);
+      }
+      client.messages.sort((left, right) => left.id.localeCompare(right.id));
+
+      if ((index + 1) % 5 === 0) {
+        const selectedClient = clients[Math.floor(random() * clients.length)];
+        const backends = random() < 0.5
+          ? [appendixUrl, cloudflareUrl]
+          : [cloudflareUrl, appendixUrl];
+        for (const url of backends) {
+          await syncClient(selectedClient, url);
+        }
+      }
+    }
+
+    for (let round = 0; round < 3; round += 1) {
+      for (const client of clients) {
+        const order = round % 2 === 0 ? backends : [...backends].reverse();
+        for (const url of order) {
+          await syncClient(client, url);
+        }
+      }
+    }
+
+    for (const client of clients) {
+      for (const url of backends) {
+        client.cursors.set(url, "-");
+      }
+    }
+    for (const client of clients) {
+      await syncClient(client, appendixUrl);
+      await syncClient(client, cloudflareUrl);
+    }
+
+    const expectedIds = [message, ...messages].map(({ id }) => id).sort();
+    for (const client of clients) {
+      expect(client.messages.map(({ id }) => id).sort()).toEqual(expectedIds);
+      expect(client.cursors.get(appendixUrl)).toBe(messages[messages.length - 1].id);
+      expect(client.cursors.get(cloudflareUrl)).toBe(messages[messages.length - 1].id);
+      expect(client.pending.get(appendixUrl)).toEqual([]);
+      expect(client.pending.get(cloudflareUrl)).toEqual([]);
+    }
+
+    for (const client of clients) {
+      await syncClient(client, appendixUrl);
+      await syncClient(client, cloudflareUrl);
+    }
+    for (const client of clients) {
+      expect(client.requests.slice(-2).map(({ payload }) => payload.messages)).toEqual([[], []]);
     }
   });
 

@@ -25,7 +25,7 @@ $(DIST)/icon_%.png: $(ASSETS)/favicon.svg
 
 .PHONY: clean
 clean-sw:
-	rm $(DIST)/workbox*
+	rm -f $(DIST)/workbox*
 
 .PHONY: clean
 clean:

@@ -127,13 +127,16 @@ export const getReplicationService = ({
       api.append(responseBody.messages);
     }
     const currentState = loadState();
+    const responseCursor = responseBody.cursor && responseBody.cursor !== EmptyMessageID
+      ? responseBody.cursor
+      : state.cursor;
     saveState({
       ...currentState,
       targets: {
         ...currentState.targets,
         [target.id]: {
           lastUpdate: new Date().getTime(),
-          cursor: responseBody.cursor ?? state.cursor,
+          cursor: responseCursor,
         },
       },
     });
