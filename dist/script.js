@@ -45,8 +45,7 @@
   var debounceTimeout = 6e4;
   var replicationStorageKey = "REPLICATION";
   var defaultReplicationState = {
-    cursor: EmptyMessageID,
-    lastUpdate: 0
+    targets: {}
   };
   var getReplicationService = ({
     api,
@@ -55,54 +54,101 @@
     connectionService,
     pubSubService
   }) => {
-    const loadState = () => replicationStorage.get();
-    const saveState = (state) => replicationStorage.set(state);
-    const getLastUpdate = () => loadState().lastUpdate;
-    const replicate = async () => {
-      if (!connectionService.isOnline()) {
-        return Promise.reject("offline");
-      }
+    const emptyTargetState = () => ({
+      cursor: EmptyMessageID,
+      lastUpdate: 0
+    });
+    const loadState = () => {
       const config = configService.get();
-      const allMessages = api.getAllMessages();
-      const state = loadState();
-      const messages = api.getAllAfter(state.cursor);
-      let cursor = state.cursor;
-      if (cursor === EmptyMessageID && allMessages.length > 0) {
-        cursor = allMessages[allMessages.length - 1].id;
+      const loadedState = replicationStorage.get();
+      const loadedTargets = loadedState?.targets || {};
+      const targets = config.targets.reduce((result, target, index) => {
+        const targetState = loadedTargets[target.id];
+        if (targetState) {
+          result[target.id] = {
+            cursor: targetState.cursor || EmptyMessageID,
+            lastUpdate: targetState.lastUpdate || 0
+          };
+        } else if (index === 0 && loadedState?.cursor !== void 0) {
+          result[target.id] = {
+            cursor: loadedState.cursor,
+            lastUpdate: loadedState.lastUpdate || 0
+          };
+        } else {
+          result[target.id] = emptyTargetState();
+        }
+        return result;
+      }, {});
+      const state = { targets };
+      if (!loadedState || !loadedState.targets) {
+        replicationStorage.set(state);
       }
-      const body = { cursor, messages };
-      pubSubService.emit("replicationStart", true);
-      console.log("REPLICATION >>>", body);
-      return fetch(config.ReplicationURL, {
+      return state;
+    };
+    const saveState = (state) => replicationStorage.set(state);
+    const getLastUpdate = () => Math.max(0, ...Object.values(loadState().targets).map(({ lastUpdate }) => lastUpdate));
+    let inFlight;
+    let autoReplicationTimer;
+    const replicateTarget = async (target, state) => {
+      const messages = api.getAllAfter(state.cursor);
+      const body = { cursor: state.cursor, messages };
+      console.log("REPLICATION >>>", target.url, body);
+      const response = await fetch(target.url, {
         method: "POST",
         cache: "no-cache",
         headers: {
           "Content-Type": "application/json",
-          "X-NodeID": config.NodeID,
-          Authorization: `Bearer ${config.APIKey}`
+          "X-NodeID": configService.get().NodeID,
+          Authorization: `Bearer ${target.apiKey}`
         },
         body: JSON.stringify(body)
-      }).then((r) => {
-        if (r.ok) {
-          return r.json();
-        }
-        throw new Error("Replication sync failed");
-      }).then((body2) => {
-        console.log("REPLICATION <<<", body2);
-        if (body2.messages) {
-          api.append(body2.messages);
-        }
-        saveState({
-          ...loadState(),
-          lastUpdate: (/* @__PURE__ */ new Date()).getTime(),
-          ...body2.cursor !== EmptyMessageID ? { cursor: body2.cursor } : {}
-        });
-      }).catch(console.error).finally(() => {
-        pubSubService.emit("replicationStop", true);
-        if (config.AutoReplication) {
-          setTimeout(replicate, config.ReplicationInterval);
+      });
+      if (!response.ok) {
+        throw new Error(`Replication sync failed for ${target.url}`);
+      }
+      const responseBody = await response.json();
+      console.log("REPLICATION <<<", target.url, responseBody);
+      if (responseBody.messages) {
+        api.append(responseBody.messages);
+      }
+      const currentState = loadState();
+      saveState({
+        ...currentState,
+        targets: {
+          ...currentState.targets,
+          [target.id]: {
+            lastUpdate: (/* @__PURE__ */ new Date()).getTime(),
+            cursor: responseBody.cursor || state.cursor
+          }
         }
       });
+    };
+    const syncTargets = async () => {
+      if (!connectionService.isOnline()) {
+        return Promise.reject("offline");
+      }
+      const config = configService.get();
+      const state = loadState();
+      pubSubService.emit("replicationStart", true);
+      const targets = config.targets.filter((target) => target.enabled && target.url.trim().length > 0);
+      await Promise.all(targets.map(
+        (target) => replicateTarget(target, state.targets[target.id] || emptyTargetState()).catch(console.error)
+      ));
+      pubSubService.emit("replicationStop", true);
+    };
+    const replicate = () => {
+      if (!inFlight) {
+        inFlight = syncTargets().finally(() => {
+          inFlight = void 0;
+          if (configService.get().AutoReplication) {
+            autoReplicationTimer = setTimeout(() => {
+              autoReplicationTimer = void 0;
+              replicate();
+            }, configService.get().ReplicationInterval);
+          }
+        });
+      }
+      return inFlight;
     };
     if (configService.get().AutoReplication) {
       replicate();
@@ -519,6 +565,12 @@
         render(configService.get(), replicationService.getLastUpdate());
       });
     });
+    const readTargets = () => [...$fieldset.querySelectorAll(".replication-target")].map((row) => ({
+      id: row.dataset.targetId || `target-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      url: row.querySelector(".target-url")?.value.trim() || "",
+      apiKey: row.querySelector(".target-api-key")?.value || "",
+      enabled: row.querySelector(".target-enabled")?.checked === true
+    }));
     $form?.addEventListener("submit", (e) => {
       e.preventDefault();
       const formData = new FormData($form);
@@ -526,8 +578,7 @@
       console.table(data);
       const config = configService.save({
         ...configService.get(),
-        ReplicationURL: data.ReplicationURL.toString(),
-        APIKey: data.APIKey.toString(),
+        targets: readTargets(),
         ReplicationInterval: parseInt(data.ReplicationInterval.toString(), 10),
         AutoReplication: (data.AutoReplication || "false") === "true" ? true : false
       });
@@ -545,6 +596,58 @@
       }
     });
     const render = (config, lastUpdate) => {
+      const targetRows = config.targets.map((target) => {
+        const $row = dom(
+          "div",
+          { class: "replication-target", "data-target-id": target.id },
+          dom(
+            "label",
+            {},
+            "URL",
+            dom("input", {
+              class: "target-url",
+              type: "url",
+              value: target.url
+            })
+          ),
+          dom(
+            "label",
+            {},
+            "API key",
+            dom("input", {
+              class: "target-api-key",
+              type: "text",
+              value: target.apiKey
+            })
+          ),
+          dom(
+            "label",
+            { class: "target-enabled-label" },
+            dom("input", {
+              class: "target-enabled",
+              type: "checkbox",
+              ...target.enabled ? { checked: "checked" } : {}
+            }),
+            "Enabled"
+          ),
+          dom("button", { type: "button", class: "remove-target" }, "remove")
+        );
+        $row.querySelector(".remove-target")?.addEventListener("click", () => {
+          $row.remove();
+        });
+        return $row;
+      });
+      const $addTargetButton = dom("button", { type: "button", class: "add-target" }, "add target");
+      $addTargetButton.addEventListener("click", () => {
+        const target = {
+          id: `target-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+          url: "",
+          apiKey: "",
+          enabled: true
+        };
+        config.targets = [...readTargets(), target];
+        render(config, lastUpdate);
+      });
       const fields = [
         dom(
           "label",
@@ -557,25 +660,11 @@
           })
         ),
         dom(
-          "label",
-          {},
-          "ReplicationURL",
-          dom("input", {
-            name: "ReplicationURL",
-            type: "url",
-            value: config.ReplicationURL
-          })
+          "div",
+          { class: "replication-targets" },
+          ...targetRows
         ),
-        dom(
-          "label",
-          {},
-          "APIKey",
-          dom("input", {
-            name: "APIKey",
-            type: "text",
-            value: config.APIKey
-          })
-        ),
+        $addTargetButton,
         dom(
           "label",
           {},
@@ -699,22 +788,37 @@
   // src/config.ts
   var configStorageKey = "CONFIG";
   var getNodeID = () => `nd-${Math.ceil((/* @__PURE__ */ new Date()).getTime()).toString(36).toUpperCase()}`;
+  var newTargetID = () => `target-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  var normalizeTarget = (target, index) => ({
+    id: typeof target.id === "string" && target.id.length > 0 ? target.id : `${newTargetID()}-${index}`,
+    url: typeof target.url === "string" ? target.url : "",
+    apiKey: typeof target.apiKey === "string" ? target.apiKey : "",
+    enabled: target.enabled !== false
+  });
+  var normalizeConfig = (loadedConfig) => {
+    const legacyTarget = loadedConfig && (loadedConfig.ReplicationURL || loadedConfig.APIKey) ? [{
+      id: newTargetID(),
+      url: loadedConfig.ReplicationURL || "",
+      apiKey: loadedConfig.APIKey || "",
+      enabled: Boolean(loadedConfig.ReplicationURL)
+    }] : [];
+    const targets = Array.isArray(loadedConfig?.targets) ? loadedConfig.targets.map(normalizeTarget) : legacyTarget;
+    return {
+      NodeID: loadedConfig?.NodeID || getNodeID(),
+      targets,
+      ReplicationInterval: typeof loadedConfig?.ReplicationInterval === "number" ? loadedConfig.ReplicationInterval : 6e4,
+      AutoReplication: loadedConfig?.AutoReplication === true
+    };
+  };
   var getConfigService = (configStorage) => {
     const save = (c) => configStorage.set(c);
     const get = () => {
-      const defaultConfig = {
-        NodeID: getNodeID(),
-        ReplicationURL: "",
-        APIKey: "",
-        ReplicationInterval: 6e4,
-        AutoReplication: false
-      };
       const loadedConfig = configStorage.get();
-      const config = { ...defaultConfig, ...loadedConfig };
-      const needsSave = !loadedConfig || Object.keys(defaultConfig).some(
-        (key) => loadedConfig[key] === void 0
+      const config = normalizeConfig(loadedConfig);
+      const isNormalized = Boolean(
+        loadedConfig && Array.isArray(loadedConfig.targets) && !loadedConfig.ReplicationURL && !loadedConfig.APIKey && loadedConfig.NodeID && loadedConfig.ReplicationInterval !== void 0 && loadedConfig.AutoReplication !== void 0
       );
-      return needsSave ? save(config) : config;
+      return isNormalized ? config : save(config);
     };
     return {
       get,

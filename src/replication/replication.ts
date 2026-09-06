@@ -1,5 +1,5 @@
 import { ApiService } from "api/api";
-import { ConfigService } from "config";
+import { ConfigService, ReplicationTarget } from "config";
 import { ConnectionService } from "connection";
 import { PubSubService } from "pubsub";
 import { StorageAdapter } from "storage/localStorage";
@@ -10,6 +10,10 @@ const debounceTimeout = 60000;
 export const replicationStorageKey = "REPLICATION";
 
 export type ReplicationState = {
+  targets: Record<string, ReplicationTargetState>;
+};
+
+export type ReplicationTargetState = {
   cursor: MessageID;
   lastUpdate: number;
 };
@@ -26,9 +30,8 @@ export type ReplicationConfig = {
   url: string;
 };
 
-export const defaultReplicationState = {
-  cursor: EmptyMessageID,
-  lastUpdate: 0,
+export const defaultReplicationState: ReplicationState = {
+  targets: {},
 };
 
 export type OnSyncStatus = (status: SyncStatus) => void;
@@ -46,66 +49,114 @@ export const getReplicationService = ({
   connectionService: ConnectionService;
   pubSubService: PubSubService;
 }) => {
-  const loadState = () => replicationStorage.get();
+  const emptyTargetState = (): ReplicationTargetState => ({
+    cursor: EmptyMessageID,
+    lastUpdate: 0,
+  });
+
+  const loadState = (): ReplicationState => {
+    const config = configService.get();
+    const loadedState = replicationStorage.get() as ReplicationState & {
+      cursor?: MessageID;
+      lastUpdate?: number;
+    };
+    const loadedTargets = loadedState?.targets || {};
+    const targets = config.targets.reduce<Record<string, ReplicationTargetState>>((result, target, index) => {
+      const targetState = loadedTargets[target.id];
+      if (targetState) {
+        result[target.id] = {
+          cursor: targetState.cursor || EmptyMessageID,
+          lastUpdate: targetState.lastUpdate || 0,
+        };
+      } else if (index === 0 && loadedState?.cursor !== undefined) {
+        result[target.id] = {
+          cursor: loadedState.cursor,
+          lastUpdate: loadedState.lastUpdate || 0,
+        };
+      } else {
+        result[target.id] = emptyTargetState();
+      }
+      return result;
+    }, {});
+    const state = { targets };
+    if (!loadedState || !loadedState.targets) {
+      replicationStorage.set(state);
+    }
+    return state;
+  };
 
   const saveState = (state: ReplicationState) => replicationStorage.set(state);
 
-  const getLastUpdate = () => loadState().lastUpdate;
+  const getLastUpdate = () => Math.max(0, ...Object.values(loadState().targets).map(({ lastUpdate }) => lastUpdate));
 
-  const replicate = async () => {
+  let inFlight: Promise<void> | undefined;
+  let autoReplicationTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const replicateTarget = async (target: ReplicationTarget, state: ReplicationTargetState) => {
+    const messages = api.getAllAfter(state.cursor);
+    const body = { cursor: state.cursor, messages };
+    console.log("REPLICATION >>>", target.url, body);
+    const response = await fetch(target.url, {
+      method: "POST",
+      cache: "no-cache",
+      headers: {
+        "Content-Type": "application/json",
+        "X-NodeID": configService.get().NodeID,
+        Authorization: `Bearer ${target.apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      throw new Error(`Replication sync failed for ${target.url}`);
+    }
+    const responseBody = await response.json();
+    console.log("REPLICATION <<<", target.url, responseBody);
+    if (responseBody.messages) {
+      api.append(responseBody.messages);
+    }
+    const currentState = loadState();
+    saveState({
+      ...currentState,
+      targets: {
+        ...currentState.targets,
+        [target.id]: {
+          lastUpdate: new Date().getTime(),
+          cursor: responseBody.cursor || state.cursor,
+        },
+      },
+    });
+  };
+
+  const syncTargets = async () => {
     if (!connectionService.isOnline()) {
       return Promise.reject("offline");
     }
 
     const config = configService.get();
-    const allMessages = api.getAllMessages();
     const state = loadState();
-    const messages = api.getAllAfter(state.cursor);
-
-    let cursor = state.cursor;
-    if (cursor === EmptyMessageID && allMessages.length > 0) {
-      cursor = allMessages[allMessages.length - 1].id;
-    }
-
-    const body = { cursor, messages };
     pubSubService.emit("replicationStart", true)
-    console.log("REPLICATION >>>", body);
-    return fetch(config.ReplicationURL, {
-      method: "POST",
-      cache: "no-cache",
-      headers: {
-        "Content-Type": "application/json",
-        "X-NodeID": config.NodeID,
-        Authorization: `Bearer ${config.APIKey}`,
-      },
-      body: JSON.stringify(body),
-    })
-      .then((r) => {
-        if (r.ok) {
-          return r.json();
-        }
-        throw new Error("Replication sync failed");
-      })
-      .then((body) => {
-        console.log("REPLICATION <<<", body);
-        if (body.messages) {
-          // store new messages
-          api.append(body.messages);
-        }
-        saveState({
-          ...loadState(),
-          lastUpdate: new Date().getTime(),
-          ...(body.cursor !== EmptyMessageID ? { cursor: body.cursor } : {}),
-        });
-      })
-      .catch(console.error)
-      .finally(() => {
-        pubSubService.emit("replicationStop", true)
-        if (config.AutoReplication) {
-          setTimeout(replicate, config.ReplicationInterval);
+    const targets = config.targets.filter((target) => target.enabled && target.url.trim().length > 0);
+    await Promise.all(targets.map((target) =>
+      replicateTarget(target, state.targets[target.id] || emptyTargetState()).catch(console.error)
+    ));
+    pubSubService.emit("replicationStop", true);
+  };
+
+  const replicate = (): Promise<void> => {
+    if (!inFlight) {
+      inFlight = syncTargets().finally(() => {
+        inFlight = undefined;
+        if (configService.get().AutoReplication) {
+          autoReplicationTimer = setTimeout(() => {
+            autoReplicationTimer = undefined;
+            replicate();
+          }, configService.get().ReplicationInterval);
         }
       });
+    }
+    return inFlight;
   };
+
   if (configService.get().AutoReplication) {
     replicate();
   } else {
