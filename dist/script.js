@@ -123,13 +123,14 @@
         api.append(responseBody.messages);
       }
       const currentState = loadState();
+      const responseCursor = responseBody.cursor && responseBody.cursor !== EmptyMessageID ? responseBody.cursor : state.cursor;
       saveState({
         ...currentState,
         targets: {
           ...currentState.targets,
           [target.id]: {
             lastUpdate: (/* @__PURE__ */ new Date()).getTime(),
-            cursor: responseBody.cursor ?? state.cursor
+            cursor: responseCursor
           }
         }
       });
@@ -169,14 +170,19 @@
       });
       return inFlight;
     };
-    if (configService.get().AutoReplication) {
-      replicate();
-    } else {
-      pubSubService.on("add", debounce(() => replicate(), debounceTimeout));
+    const autoReplication = configService.get().AutoReplication;
+    if (autoReplication) {
+      autoReplicationTimer = setTimeout(() => {
+        autoReplicationTimer = void 0;
+        replicate();
+      }, configService.get().ReplicationInterval);
     }
-    pubSubService.on("connectionOnline", () => {
-      void replicate().catch(() => void 0);
-    });
+    pubSubService.on("add", debounce(() => replicate(), debounceTimeout));
+    if (autoReplication) {
+      pubSubService.on("connectionOnline", () => {
+        void replicate().catch(() => void 0);
+      });
+    }
     return {
       replicate,
       getLastUpdate

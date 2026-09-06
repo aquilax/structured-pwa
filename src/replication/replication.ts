@@ -180,14 +180,19 @@ export const getReplicationService = ({
     return inFlight;
   };
 
-  if (configService.get().AutoReplication) {
-    replicate();
-  } else {
-    pubSubService.on("add", debounce(() => replicate(), debounceTimeout))
+  const autoReplication = configService.get().AutoReplication;
+  if (autoReplication) {
+    autoReplicationTimer = setTimeout(() => {
+      autoReplicationTimer = undefined;
+      replicate();
+    }, configService.get().ReplicationInterval);
   }
-  pubSubService.on("connectionOnline", () => {
-    void replicate().catch(() => undefined);
-  });
+  pubSubService.on("add", debounce(() => replicate(), debounceTimeout));
+  if (autoReplication) {
+    pubSubService.on("connectionOnline", () => {
+      void replicate().catch(() => undefined);
+    });
+  }
   return {
     replicate,
     getLastUpdate,
