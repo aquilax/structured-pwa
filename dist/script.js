@@ -47,6 +47,18 @@
   var defaultReplicationState = {
     targets: {}
   };
+  var parseResponse = (body) => {
+    if (!body || typeof body !== "object" || !Array.isArray(body.messages)) {
+      throw new Error("Replication response must contain a messages array");
+    }
+    if (body.cursor !== void 0 && typeof body.cursor !== "string") {
+      throw new Error("Replication response cursor must be a string");
+    }
+    return {
+      cursor: body.cursor,
+      messages: body.messages
+    };
+  };
   var getReplicationService = ({
     api,
     replicationStorage,
@@ -80,17 +92,16 @@
         return result;
       }, {});
       const state = { targets };
-      if (!loadedState || !loadedState.targets) {
-        replicationStorage.set(state);
-      }
+      replicationStorage.set(state);
       return state;
     };
     const saveState = (state) => replicationStorage.set(state);
     const getLastUpdate = () => Math.max(0, ...Object.values(loadState().targets).map(({ lastUpdate }) => lastUpdate));
     let inFlight;
+    let pendingReplicate = false;
     let autoReplicationTimer;
     const replicateTarget = async (target, state) => {
-      const messages = api.getAllAfter(state.cursor);
+      const messages = await api.getAllAfter(state.cursor);
       const body = { cursor: state.cursor, messages };
       console.log("REPLICATION >>>", target.url, body);
       const response = await fetch(target.url, {
@@ -106,7 +117,7 @@
       if (!response.ok) {
         throw new Error(`Replication sync failed for ${target.url}`);
       }
-      const responseBody = await response.json();
+      const responseBody = parseResponse(await response.json());
       console.log("REPLICATION <<<", target.url, responseBody);
       if (responseBody.messages) {
         api.append(responseBody.messages);
@@ -118,7 +129,7 @@
           ...currentState.targets,
           [target.id]: {
             lastUpdate: (/* @__PURE__ */ new Date()).getTime(),
-            cursor: responseBody.cursor || state.cursor
+            cursor: responseBody.cursor ?? state.cursor
           }
         }
       });
@@ -131,23 +142,31 @@
       const state = loadState();
       pubSubService.emit("replicationStart", true);
       const targets = config.targets.filter((target) => target.enabled && target.url.trim().length > 0);
-      await Promise.all(targets.map(
-        (target) => replicateTarget(target, state.targets[target.id] || emptyTargetState()).catch(console.error)
-      ));
+      await Promise.all(
+        targets.map(
+          (target) => replicateTarget(target, state.targets[target.id] || emptyTargetState()).catch(console.error)
+        )
+      );
       pubSubService.emit("replicationStop", true);
     };
     const replicate = () => {
-      if (!inFlight) {
-        inFlight = syncTargets().finally(() => {
-          inFlight = void 0;
-          if (configService.get().AutoReplication) {
-            autoReplicationTimer = setTimeout(() => {
-              autoReplicationTimer = void 0;
-              replicate();
-            }, configService.get().ReplicationInterval);
-          }
-        });
+      if (inFlight) {
+        pendingReplicate = true;
+        return inFlight;
       }
+      pendingReplicate = false;
+      inFlight = syncTargets().finally(() => {
+        inFlight = void 0;
+        if (pendingReplicate) {
+          pendingReplicate = false;
+          replicate();
+        } else if (configService.get().AutoReplication) {
+          autoReplicationTimer = setTimeout(() => {
+            autoReplicationTimer = void 0;
+            replicate();
+          }, configService.get().ReplicationInterval);
+        }
+      });
       return inFlight;
     };
     if (configService.get().AutoReplication) {
@@ -155,6 +174,9 @@
     } else {
       pubSubService.on("add", debounce(() => replicate(), debounceTimeout));
     }
+    pubSubService.on("connectionOnline", () => {
+      void replicate().catch(() => void 0);
+    });
     return {
       replicate,
       getLastUpdate
@@ -373,27 +395,35 @@
     return next ? next + 1 : messages.length;
   };
   var apiService = (nodeID, messageStorage, pubSubService) => {
+    const sortMessages = (messages) => {
+      return [...messages].sort((a, b) => {
+        const tsA = a.meta?.ts || 0;
+        const tsB = b.meta?.ts || 0;
+        if (tsA !== tsB) return tsA - tsB;
+        return a.id.localeCompare(b.id);
+      });
+    };
     const add = (namespace, data) => {
       const state = messageStorage.get();
       const seq = getSeq(state.messages || []);
-      const messageID = newMessageID(namespace, nodeID, seq);
+      const messageId = newMessageID(namespace, nodeID, seq);
       const message = {
-        id: messageID,
+        id: messageId,
         meta: {
           node: nodeID,
           ns: namespace,
           op: "ADD",
-          messageID: EmptyMessageID,
+          message_id: EmptyMessageID,
           ts: (/* @__PURE__ */ new Date()).getTime()
         },
         data
       };
       messageStorage.set({
         ...state,
-        messages: [...state.messages || [], message]
+        messages: sortMessages([...state.messages || [], message])
       });
       pubSubService.emit("add");
-      return messageID;
+      return messageId;
     };
     const normalizeMessageData = (data) => {
       const { ts, ...rest } = data || {};
@@ -418,9 +448,7 @@
           compacted.set(key, message);
         }
       });
-      const compactedMessages = [...newerMessages, ...compacted.values()].sort(
-        (a, b) => a.meta.ts - b.meta.ts
-      );
+      const compactedMessages = sortMessages([...newerMessages, ...compacted.values()]);
       messageStorage.set({
         ...state,
         messages: compactedMessages
@@ -432,13 +460,23 @@
     };
     const getAllAfter = (cursor) => {
       const all = getAllMessages();
-      const i = all.findLastIndex((m) => m.id == cursor);
-      return i === -1 ? all : all.slice(i + 1);
+      if (!cursor || cursor === EmptyMessageID) {
+        return all;
+      }
+      const i = all.findIndex((m) => m.id === cursor);
+      if (i !== -1) {
+        return all.slice(i + 1);
+      }
+      return all;
     };
     const append = (messages) => {
       const state = messageStorage.get();
-      const ids = state.messages.map((m) => m.id);
-      const newMessages = [...state.messages || [], ...messages.filter((m) => !ids.includes(m.id))];
+      const existingIds = new Set((state.messages || []).map((m) => m.id));
+      const toAdd = messages.filter((m) => !existingIds.has(m.id));
+      if (toAdd.length === 0) {
+        return state;
+      }
+      const newMessages = sortMessages([...state.messages || [], ...toAdd]);
       return messageStorage.set({
         ...state,
         messages: newMessages
@@ -521,8 +559,7 @@
         card.remove();
       }
     });
-    if (!$fieldset)
-      return;
+    if (!$fieldset) return;
     const setNamespaceOptions = (namespaces) => {
       $magicNamespaces?.replaceChildren(
         ...namespaces.map((namespace) => {
@@ -541,8 +578,7 @@
     });
     $loadRawButton?.addEventListener("click", async () => {
       const selectedNamespace = $namespaceInput?.value.trim();
-      if (!selectedNamespace || !$rawMessage)
-        return;
+      if (!selectedNamespace || !$rawMessage) return;
       const [namespace, configNamespace] = selectedNamespace.split(`${magicNamespaces[1]}.`);
       const data = configNamespace === void 0 ? await api.getLatestNamespaceData(selectedNamespace) : await api.getLatestNamespaceConfig(configNamespace);
       if (data !== void 0) {
@@ -707,8 +743,7 @@
     const elements = await api.getHomeElements();
     $homeContainer?.addEventListener("click", (e) => {
       const target = e.target;
-      if (!target)
-        return;
+      if (!target) return;
       if (target.matches(".button.home")) {
         e.preventDefault();
         const namespace = target.dataset["namespace"];
@@ -763,8 +798,7 @@
     const $container = global.document.getElementById("container");
     const $syncStatusIcon = global.document.getElementById("sync-status-icon");
     const $onlineStatusIcon = global.document.getElementById("online-status-icon");
-    if (!$container)
-      return;
+    if (!$container) return;
     if ($onlineStatusIcon) {
       pubSubService.on("connectionOnline", () => {
         $onlineStatusIcon.style.display = "inline";
@@ -772,8 +806,8 @@
       pubSubService.on("connectionOffline", () => {
         $onlineStatusIcon.style.display = "none";
       });
-      pubSubService.emit("checkConnection");
     }
+    pubSubService.emit("checkConnection");
     if ($syncStatusIcon) {
       pubSubService.on("replicationStart", () => {
         $syncStatusIcon.style.display = "inline";

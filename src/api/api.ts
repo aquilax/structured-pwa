@@ -55,31 +55,40 @@ const getSeq = (messages: Message[]) => {
 }
 
 export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<MessagesState>, pubSubService: PubSubService) => {
+  const sortMessages = (messages: Message[]): Message[] => {
+    return [...messages].sort((a, b) => {
+      const tsA = a.meta?.ts || 0;
+      const tsB = b.meta?.ts || 0;
+      if (tsA !== tsB) return tsA - tsB;
+      return a.id.localeCompare(b.id);
+    });
+  };
+
   const add = (namespace: Namespace, data: any): MessageID => {
     const state = messageStorage.get();
-    const seq = getSeq(state.messages || [])
-    const messageID = newMessageID(namespace, nodeID, seq);
+    const seq = getSeq(state.messages || []);
+    const messageId = newMessageID(namespace, nodeID, seq);
     const message: Message = {
-      id: messageID,
+      id: messageId,
       meta: {
         node: nodeID,
         ns: namespace,
         op: "ADD",
-        messageID: EmptyMessageID,
+        message_id: EmptyMessageID,
         ts: new Date().getTime(),
       },
       data: data,
     };
     messageStorage.set({
       ...state,
-      messages: [...(state.messages || []), message],
+      messages: sortMessages([...(state.messages || []), message]),
     });
-    pubSubService.emit('add')
-    return messageID;
+    pubSubService.emit("add");
+    return messageId;
   };
 
   const normalizeMessageData = (data: MessageData): any => {
-    const {ts, ...rest} = data || {};
+    const { ts, ...rest } = data || {};
     return rest;
   };
 
@@ -109,9 +118,7 @@ export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<Messag
         }
       });
 
-    const compactedMessages = [...newerMessages, ...compacted.values()].sort(
-      (a, b) => a.meta.ts - b.meta.ts
-    );
+    const compactedMessages = sortMessages([...newerMessages, ...compacted.values()]);
 
     messageStorage.set({
       ...state,
@@ -126,14 +133,24 @@ export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<Messag
 
   const getAllAfter = (cursor: MessageID): Message[] => {
     const all = getAllMessages();
-    const i = all.findLastIndex((m) => m.id == cursor);
-    return i === -1 ? all : all.slice(i + 1);
+    if (!cursor || cursor === EmptyMessageID) {
+      return all;
+    }
+    const i = all.findIndex((m) => m.id === cursor);
+    if (i !== -1) {
+      return all.slice(i + 1);
+    }
+    return all;
   };
 
   const append = (messages: Message[]): MessagesState => {
     const state = messageStorage.get();
-    const ids = state.messages.map(m => m.id);
-    const newMessages = [...(state.messages || []), ...messages.filter(m => !ids.includes(m.id))];
+    const existingIds = new Set((state.messages || []).map((m) => m.id));
+    const toAdd = messages.filter((m) => !existingIds.has(m.id));
+    if (toAdd.length === 0) {
+      return state;
+    }
+    const newMessages = sortMessages([...(state.messages || []), ...toAdd]);
     return messageStorage.set({
       ...state,
       messages: newMessages,

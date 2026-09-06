@@ -3,7 +3,7 @@ import { ConfigService, ReplicationTarget } from "config";
 import { ConnectionService } from "connection";
 import { PubSubService } from "pubsub";
 import { StorageAdapter } from "storage/localStorage";
-import { EmptyMessageID, MessageID } from "storage/storage";
+import { EmptyMessageID, Message, MessageID } from "storage/storage";
 import { debounce } from "utils";
 
 const debounceTimeout = 60000;
@@ -35,6 +35,19 @@ export const defaultReplicationState: ReplicationState = {
 };
 
 export type OnSyncStatus = (status: SyncStatus) => void;
+
+const parseResponse = (body: any): { cursor?: MessageID; messages: Message[] } => {
+  if (!body || typeof body !== "object" || !Array.isArray(body.messages)) {
+    throw new Error("Replication response must contain a messages array");
+  }
+  if (body.cursor !== undefined && typeof body.cursor !== "string") {
+    throw new Error("Replication response cursor must be a string");
+  }
+  return {
+    cursor: body.cursor,
+    messages: body.messages,
+  };
+};
 
 export const getReplicationService = ({
   api,
@@ -79,9 +92,7 @@ export const getReplicationService = ({
       return result;
     }, {});
     const state = { targets };
-    if (!loadedState || !loadedState.targets) {
-      replicationStorage.set(state);
-    }
+    replicationStorage.set(state);
     return state;
   };
 
@@ -90,10 +101,11 @@ export const getReplicationService = ({
   const getLastUpdate = () => Math.max(0, ...Object.values(loadState().targets).map(({ lastUpdate }) => lastUpdate));
 
   let inFlight: Promise<void> | undefined;
+  let pendingReplicate = false;
   let autoReplicationTimer: ReturnType<typeof setTimeout> | undefined;
 
   const replicateTarget = async (target: ReplicationTarget, state: ReplicationTargetState) => {
-    const messages = api.getAllAfter(state.cursor);
+    const messages = await api.getAllAfter(state.cursor);
     const body = { cursor: state.cursor, messages };
     console.log("REPLICATION >>>", target.url, body);
     const response = await fetch(target.url, {
@@ -109,7 +121,7 @@ export const getReplicationService = ({
     if (!response.ok) {
       throw new Error(`Replication sync failed for ${target.url}`);
     }
-    const responseBody = await response.json();
+    const responseBody = parseResponse(await response.json());
     console.log("REPLICATION <<<", target.url, responseBody);
     if (responseBody.messages) {
       api.append(responseBody.messages);
@@ -121,7 +133,7 @@ export const getReplicationService = ({
         ...currentState.targets,
         [target.id]: {
           lastUpdate: new Date().getTime(),
-          cursor: responseBody.cursor || state.cursor,
+          cursor: responseBody.cursor ?? state.cursor,
         },
       },
     });
@@ -134,26 +146,34 @@ export const getReplicationService = ({
 
     const config = configService.get();
     const state = loadState();
-    pubSubService.emit("replicationStart", true)
+    pubSubService.emit("replicationStart", true);
     const targets = config.targets.filter((target) => target.enabled && target.url.trim().length > 0);
-    await Promise.all(targets.map((target) =>
-      replicateTarget(target, state.targets[target.id] || emptyTargetState()).catch(console.error)
-    ));
+    await Promise.all(
+      targets.map((target) =>
+        replicateTarget(target, state.targets[target.id] || emptyTargetState()).catch(console.error)
+      )
+    );
     pubSubService.emit("replicationStop", true);
   };
 
   const replicate = (): Promise<void> => {
-    if (!inFlight) {
-      inFlight = syncTargets().finally(() => {
-        inFlight = undefined;
-        if (configService.get().AutoReplication) {
-          autoReplicationTimer = setTimeout(() => {
-            autoReplicationTimer = undefined;
-            replicate();
-          }, configService.get().ReplicationInterval);
-        }
-      });
+    if (inFlight) {
+      pendingReplicate = true;
+      return inFlight;
     }
+    pendingReplicate = false;
+    inFlight = syncTargets().finally(() => {
+      inFlight = undefined;
+      if (pendingReplicate) {
+        pendingReplicate = false;
+        replicate();
+      } else if (configService.get().AutoReplication) {
+        autoReplicationTimer = setTimeout(() => {
+          autoReplicationTimer = undefined;
+          replicate();
+        }, configService.get().ReplicationInterval);
+      }
+    });
     return inFlight;
   };
 
@@ -162,6 +182,9 @@ export const getReplicationService = ({
   } else {
     pubSubService.on("add", debounce(() => replicate(), debounceTimeout))
   }
+  pubSubService.on("connectionOnline", () => {
+    void replicate().catch(() => undefined);
+  });
   return {
     replicate,
     getLastUpdate,

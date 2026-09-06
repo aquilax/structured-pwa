@@ -10,7 +10,7 @@ export type MessageMeta = {
   node: NodeID;
   ns: Namespace;
   op: MessageOperator;
-  messageID: MaybeMessageID;
+  message_id: MaybeMessageID;
   ts: number;
 };
 

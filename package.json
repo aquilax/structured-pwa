@@ -4,21 +4,23 @@
   "description": "Structured data entry PWA",
   "main": "script.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest",
+    "test:e2e": "RUN_REPLICATION_E2E=1 vitest --run test/e2e/replication.e2e.test.mjs"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/aquilax/if-pwa.git"
+    "url": "git+https://github.com/aquilax/structured-pwa.git"
   },
   "keywords": [],
-  "author": "",
+  "author": "aquilax",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/aquilax/structured-pwa/issues"
   },
   "homepage": "https://github.com/aquilax/structured-pwa#readme",
   "devDependencies": {
-    "esbuild": "0.19.4",
+    "esbuild": "^0.28.2",
+    "vitest": "^5.0.0",
     "workbox-cli": "^7.4.1"
   },
   "prettier": {
