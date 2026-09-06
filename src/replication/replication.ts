@@ -90,6 +90,7 @@ export const getReplicationService = ({
   const getLastUpdate = () => Math.max(0, ...Object.values(loadState().targets).map(({ lastUpdate }) => lastUpdate));
 
   let inFlight: Promise<void> | undefined;
+  let pendingReplicate = false;
   let autoReplicationTimer: ReturnType<typeof setTimeout> | undefined;
 
   const replicateTarget = async (target: ReplicationTarget, state: ReplicationTargetState) => {
@@ -134,26 +135,34 @@ export const getReplicationService = ({
 
     const config = configService.get();
     const state = loadState();
-    pubSubService.emit("replicationStart", true)
+    pubSubService.emit("replicationStart", true);
     const targets = config.targets.filter((target) => target.enabled && target.url.trim().length > 0);
-    await Promise.all(targets.map((target) =>
-      replicateTarget(target, state.targets[target.id] || emptyTargetState()).catch(console.error)
-    ));
+    await Promise.all(
+      targets.map((target) =>
+        replicateTarget(target, state.targets[target.id] || emptyTargetState()).catch(console.error)
+      )
+    );
     pubSubService.emit("replicationStop", true);
   };
 
   const replicate = (): Promise<void> => {
-    if (!inFlight) {
-      inFlight = syncTargets().finally(() => {
-        inFlight = undefined;
-        if (configService.get().AutoReplication) {
-          autoReplicationTimer = setTimeout(() => {
-            autoReplicationTimer = undefined;
-            replicate();
-          }, configService.get().ReplicationInterval);
-        }
-      });
+    if (inFlight) {
+      pendingReplicate = true;
+      return inFlight;
     }
+    pendingReplicate = false;
+    inFlight = syncTargets().finally(() => {
+      inFlight = undefined;
+      if (pendingReplicate) {
+        pendingReplicate = false;
+        replicate();
+      } else if (configService.get().AutoReplication) {
+        autoReplicationTimer = setTimeout(() => {
+          autoReplicationTimer = undefined;
+          replicate();
+        }, configService.get().ReplicationInterval);
+      }
+    });
     return inFlight;
   };
 
