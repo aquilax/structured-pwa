@@ -17,11 +17,11 @@ import (
 
 const ENV_APPENDIX_LOG = "APPENDIX_LOG"
 const ENV_API_TOKEN = "API_TOKEN"
+const ENV_APPENDIX_ADDR = "APPENDIX_ADDR"
 const EmptyMessageID MessageID = "-"
 
 var newLine = []byte{10}
 
-type NodeID string
 type Namespace string // dataset.v1
 type MessageID string
 type MessageOperator string
@@ -126,8 +126,11 @@ func main() {
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	srv := &http.Server{
-		Addr:    ":3333",
+		Addr:    os.Getenv(ENV_APPENDIX_ADDR),
 		Handler: mux,
+	}
+	if srv.Addr == "" {
+		srv.Addr = ":3333"
 	}
 	go func() {
 		if err := srv.ListenAndServe(); err != nil {
@@ -191,18 +194,23 @@ func (a *App) saveRequest(p *Payload) error {
 		if _, found := a.ids[p.Messages[i].ID]; found {
 			continue
 		}
-		a.storage = append(a.storage, p.Messages[i])
-		a.ids[p.Messages[i].ID] = nil
 		msg, err := json.Marshal(p.Messages[i])
 		if err != nil {
 			return ErrBadRequest
 		}
 		if _, err := a.stream.Write(msg); err != nil {
-			panic(err)
+			return err
 		}
 		if _, err = a.stream.Write(newLine); err != nil {
-			panic(err)
+			return err
 		}
+		if syncer, ok := a.stream.(interface{ Sync() error }); ok {
+			if err := syncer.Sync(); err != nil {
+				return err
+			}
+		}
+		a.storage = append(a.storage, p.Messages[i])
+		a.ids[p.Messages[i].ID] = nil
 		added = true
 	}
 	if added {
@@ -217,6 +225,9 @@ func (a *App) getResponse(messageID MessageID, messages []Message) *Payload {
 			l := len(messages)
 			if l > 0 {
 				return messages[l-1].ID
+			}
+			if messageID != "" {
+				return messageID
 			}
 			return EmptyMessageID
 		}(),

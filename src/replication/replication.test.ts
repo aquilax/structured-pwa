@@ -1,5 +1,5 @@
 // replication.test.ts
-import { expect, test, vi } from 'vitest'
+import { beforeEach, expect, test, vi } from 'vitest'
 import { getReplicationService } from "./replication";
 import type { ReplicationTarget } from "config";
 import type { ApiService } from "api/api";
@@ -23,7 +23,7 @@ class MockApi implements ApiService {
   }
   add(namespace: string, data: any) {
     const id = `${namespace}.node.1`;
-    const msg = { id, meta: { ns: namespace, op: "ADD", ts: Date.now() }, data };
+    const msg = { id, meta: { ns: namespace, op: "ADD", message_id: "-", ts: Date.now() }, data };
     this.messages.push(msg);
     return id;
   }
@@ -68,6 +68,10 @@ global.fetch = vi.fn().mockImplementation((url: string, opts: any) => {
   });
 });
 
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
 test("replication sends payload to each enabled target and updates state", async () => {
   const api = new MockApi();
   const storage = new MockStorage<any>();
@@ -97,8 +101,57 @@ test("replication sends payload to each enabled target and updates state", async
   expect((global.fetch as vi.Mock).mock.calls.length).toBe(2);
   const firstCallBody = JSON.parse((global.fetch as vi.Mock).mock.calls[0][1].body);
   expect(firstCallBody.messages.length).toBe(1);
+  expect(firstCallBody.messages[0].meta.message_id).toBe("-");
   // state should now contain cursor updates for each target
   const state = storage.get();
   expect(state.targets["appendix"].cursor).toBeDefined();
   expect(state.targets["cloudflare"].cursor).toBeDefined();
+});
+
+test("replication starts when the connection comes online", async () => {
+  const api = new MockApi();
+  api.add("test", { foo: "bar" });
+  const storage = new MockStorage<any>();
+  storage.set({ targets: {} });
+  const pubsub = new MockPubSub();
+  getReplicationService({
+    api,
+    replicationStorage: storage,
+    configService: new MockConfig([
+      { id: "appendix", url: "http://appendix/sync", enabled: true, apiKey: "key" },
+    ]),
+    connectionService: new MockConnection(),
+    pubSubService: pubsub,
+  });
+
+  pubsub.emit("connectionOnline");
+  await vi.waitFor(() => expect((global.fetch as vi.Mock).mock.calls).toHaveLength(1));
+});
+
+test("a failed target keeps its cursor unchanged for the next retry", async () => {
+  const api = new MockApi();
+  api.add("test", { foo: "bar" });
+  const storage = new MockStorage<any>();
+  storage.set({ targets: {} });
+  const fetchMock = global.fetch as vi.Mock;
+  fetchMock.mockRejectedValueOnce(new Error("offline target"));
+
+  const replication = getReplicationService({
+    api,
+    replicationStorage: storage,
+    configService: new MockConfig([
+      { id: "appendix", url: "http://appendix/sync", enabled: true, apiKey: "key" },
+    ]),
+    connectionService: new MockConnection(),
+    pubSubService: new MockPubSub(),
+  });
+
+  await replication.replicate();
+  expect(storage.get().targets.appendix.cursor).toBe("-");
+  fetchMock.mockResolvedValueOnce({
+    ok: true,
+    json: () => Promise.resolve({ cursor: "test.node.1", messages: [] }),
+  });
+  await replication.replicate();
+  expect(storage.get().targets.appendix.cursor).toBe("test.node.1");
 });

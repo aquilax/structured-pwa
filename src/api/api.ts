@@ -67,14 +67,14 @@ export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<Messag
   const add = (namespace: Namespace, data: any): MessageID => {
     const state = messageStorage.get();
     const seq = getSeq(state.messages || []);
-    const messageID = newMessageID(namespace, nodeID, seq);
+    const messageId = newMessageID(namespace, nodeID, seq);
     const message: Message = {
-      id: messageID,
+      id: messageId,
       meta: {
         node: nodeID,
         ns: namespace,
         op: "ADD",
-        messageID: EmptyMessageID,
+        message_id: EmptyMessageID,
         ts: new Date().getTime(),
       },
       data: data,
@@ -84,7 +84,7 @@ export const apiService = (nodeID: NodeID, messageStorage: StorageAdapter<Messag
       messages: sortMessages([...(state.messages || []), message]),
     });
     pubSubService.emit("add");
-    return messageID;
+    return messageId;
   };
 
   const normalizeMessageData = (data: MessageData): any => {

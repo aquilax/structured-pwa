@@ -30,8 +30,8 @@ export const app = ({
     pubSubService.on("connectionOffline", () => {
       $onlineStatusIcon.style.display = "none";
     });
-    pubSubService.emit("checkConnection");
   }
+  pubSubService.emit("checkConnection");
 
   if ($syncStatusIcon) {
     pubSubService.on("replicationStart", () => {

@@ -4,7 +4,8 @@
   "description": "Structured data entry PWA",
   "main": "script.js",
   "scripts": {
-    "test": "vitest"
+    "test": "vitest",
+    "test:e2e": "RUN_REPLICATION_E2E=1 vitest --run test/e2e/replication.e2e.test.mjs"
   },
   "repository": {
     "type": "git",
