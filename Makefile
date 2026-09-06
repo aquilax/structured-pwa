@@ -13,7 +13,7 @@ copy_assets:
 	cp $(ASSETS)/* $(DIST)
 
 $(DIST)/script.js: $(SRC)/index.ts $(SRC_FILES)
-	./node_modules/.bin/esbuild $< --bundle --outfile=$@
+	./node_modules/.bin/esbuild $< --bundle --define:__GIT_HASH__='"$$(git rev-parse --short HEAD 2>/dev/null || printf unknown)"' --outfile=$@
 
 $(DIST)/sw.js: workbox-config.js $(DIST)/script.js
 	./node_modules/.bin/workbox generateSW $<
