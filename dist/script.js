@@ -728,7 +728,7 @@
             ...config.AutoReplication ? { checked: "checked" } : {}
           })
         ),
-        dom("em", {}, `Version: ${"$(git rev-parse --short HEAD 2>/dev/null || printf unknown)"}`),
+        dom("em", {}, `Version: ${"10dec6b"}`),
         dom("em", {}, `Last update: ${new Date(lastUpdate).toLocaleString("sv", { timeZoneName: "short" })}`)
       ].map((f) => dom("div", {}, f));
       $fieldset.replaceChildren(...fields);

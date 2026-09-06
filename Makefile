@@ -4,6 +4,7 @@ SRC := ./src
 SRC_FILES := $(shell find $(SRC) -type f -name '*.ts')
 resolutions := 48 72 96 144 192 512
 ALL_ICONS := $(foreach resolution, $(resolutions), $(DIST)/icon_$(resolution).png)
+GIT_HASH := $(shell git rev-parse --short HEAD 2>/dev/null || printf unknown)
 
 all: images copy_assets $(DIST)/sw.js
 
@@ -13,7 +14,7 @@ copy_assets:
 	cp $(ASSETS)/* $(DIST)
 
 $(DIST)/script.js: $(SRC)/index.ts $(SRC_FILES)
-	./node_modules/.bin/esbuild $< --bundle --define:__GIT_HASH__='"$$(git rev-parse --short HEAD 2>/dev/null || printf unknown)"' --outfile=$@
+	./node_modules/.bin/esbuild $< --bundle --define:__GIT_HASH__='"$(GIT_HASH)"' --outfile=$@
 
 $(DIST)/sw.js: workbox-config.js $(DIST)/script.js
 	./node_modules/.bin/workbox generateSW $<
