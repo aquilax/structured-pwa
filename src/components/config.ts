@@ -86,6 +86,13 @@ export const renderConfig = ({
     });
   });
 
+  const readTargets = () => [...$fieldset.querySelectorAll<HTMLElement>(".replication-target")].map((row) => ({
+    id: row.dataset.targetId || `target-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    url: row.querySelector<HTMLInputElement>(".target-url")?.value.trim() || "",
+    apiKey: row.querySelector<HTMLInputElement>(".target-api-key")?.value || "",
+    enabled: row.querySelector<HTMLInputElement>(".target-enabled")?.checked === true,
+  }));
+
   $form?.addEventListener("submit", (e) => {
     e.preventDefault();
     const formData = new FormData($form);
@@ -93,8 +100,7 @@ export const renderConfig = ({
     console.table(data);
     const config = configService.save({
       ...configService.get(),
-      ReplicationURL: data.ReplicationURL.toString(),
-      APIKey: data.APIKey.toString(),
+      targets: readTargets(),
       ReplicationInterval: parseInt(data.ReplicationInterval.toString(), 10),
       AutoReplication: (data.AutoReplication || "false") === "true" ? true : false,
     });
@@ -114,6 +120,59 @@ export const renderConfig = ({
   })
 
   const render = (config: ConfigState, lastUpdate: number) => {
+    const targetRows = config.targets.map((target) => {
+      const $row = dom(
+        "div",
+        { class: "replication-target", "data-target-id": target.id },
+        dom(
+          "label",
+          {},
+          "URL",
+          dom("input", {
+            class: "target-url",
+            type: "url",
+            value: target.url,
+          })
+        ),
+        dom(
+          "label",
+          {},
+          "API key",
+          dom("input", {
+            class: "target-api-key",
+            type: "text",
+            value: target.apiKey,
+          })
+        ),
+        dom(
+          "label",
+          { class: "target-enabled-label" },
+          dom("input", {
+            class: "target-enabled",
+            type: "checkbox",
+            ...(target.enabled ? { checked: "checked" } : {}),
+          }),
+          "Enabled"
+        ),
+        dom("button", { type: "button", class: "remove-target" }, "remove")
+      );
+      $row.querySelector<HTMLButtonElement>(".remove-target")?.addEventListener("click", () => {
+        $row.remove();
+      });
+      return $row;
+    });
+    const $addTargetButton = dom("button", { type: "button", class: "add-target" }, "add target");
+    $addTargetButton.addEventListener("click", () => {
+      const target = {
+        id: `target-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        url: "",
+        apiKey: "",
+        enabled: true,
+      };
+      config.targets = [...readTargets(), target];
+      render(config, lastUpdate);
+    });
+
     const fields = [
       dom(
         "label",
@@ -127,26 +186,11 @@ export const renderConfig = ({
       ),
 
       dom(
-        "label",
-        {},
-        "ReplicationURL",
-        dom("input", {
-          name: "ReplicationURL",
-          type: "url",
-          value: config.ReplicationURL,
-        })
+        "div",
+        { class: "replication-targets" },
+        ...targetRows
       ),
-
-      dom(
-        "label",
-        {},
-        "APIKey",
-        dom("input", {
-          name: "APIKey",
-          type: "text",
-          value: config.APIKey,
-        })
-      ),
+      $addTargetButton,
 
       dom(
         "label",
